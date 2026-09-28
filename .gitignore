@@ -1,0 +1,26 @@
+# Data (never commit datasets)
+data/
+*.csv
+*.parquet
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Spark / Hadoop local artifacts
+spark-warehouse/
+metastore_db/
+derby.log
+spark-events/
+
+# Model checkpoints
+checkpoints/
+*.pt
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
