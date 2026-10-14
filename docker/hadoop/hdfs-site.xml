@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <!-- Two datanodes, so each block is stored twice. -->
+  <property>
+    <name>dfs.replication</name>
+    <value>2</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>file:///hadoop/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file:///hadoop/dfs/data</value>
+  </property>
+
+  <!-- Bind RPC and HTTP on all interfaces so other containers and the host can reach them. -->
+  <property>
+    <name>dfs.namenode.rpc-bind-host</name>
+    <value>0.0.0.0</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-bind-host</name>
+    <value>0.0.0.0</value>
+  </property>
+
+  <!-- Docker container IPs have no reverse DNS; skip the hostname check on registration. -->
+  <property>
+    <name>dfs.namenode.datanode.registration.ip-hostname-check</name>
+    <value>false</value>
+  </property>
+
+  <!-- Local dev cluster: Spark runs as a different OS user, so skip HDFS permission checks. -->
+  <property>
+    <name>dfs.permissions.enabled</name>
+    <value>false</value>
+  </property>
+
+  <property>
+    <name>dfs.webhdfs.enabled</name>
+    <value>true</value>
+  </property>
+</configuration>
