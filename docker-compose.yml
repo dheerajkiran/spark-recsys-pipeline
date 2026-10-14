@@ -1,4 +1,6 @@
 # Local HDFS + Spark cluster. See README section 6 for sizing.
+# Host ports bind to 127.0.0.1 only: HDFS and Spark have no authentication here,
+# so they must not be reachable from the local network.
 
 x-hadoop: &hadoop
   build: ./docker/hadoop
@@ -8,6 +10,28 @@ x-hadoop: &hadoop
   mem_limit: 1g
   restart: unless-stopped
 
+x-spark: &spark
+  build: ./docker/spark
+  image: recsys/spark:3.5.9
+  restart: unless-stopped
+
+x-spark-worker: &spark-worker
+  <<: *spark
+  command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+  environment:
+    SPARK_WORKER_CORES: "2"
+    SPARK_WORKER_MEMORY: 1600m
+    SPARK_DAEMON_MEMORY: 256m
+  mem_limit: 2g
+  depends_on:
+    spark-master:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD", "bash", "-c", "</dev/tcp/localhost/8081"]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+
 services:
   namenode:
     <<: *hadoop
@@ -15,8 +39,8 @@ services:
     hostname: namenode
     command: ["namenode"]
     ports:
-      - "9870:9870"   # web UI
-      - "9000:9000"   # RPC
+      - "127.0.0.1:9870:9870"   # web UI
+      - "127.0.0.1:9000:9000"   # RPC
     volumes:
       - namenode:/hadoop/dfs/name
       - ./data/raw:/data/raw:ro   # local downloads, for scripts/load_to_hdfs.sh
@@ -32,7 +56,7 @@ services:
     hostname: datanode-1
     command: ["datanode"]
     ports:
-      - "9864:9864"   # web UI
+      - "127.0.0.1:9864:9864"   # web UI
     volumes:
       - datanode-1:/hadoop/dfs/data
     depends_on:
@@ -50,7 +74,7 @@ services:
     hostname: datanode-2
     command: ["datanode"]
     ports:
-      - "9865:9864"   # web UI
+      - "127.0.0.1:9865:9864"   # web UI
     volumes:
       - datanode-2:/hadoop/dfs/data
     depends_on:
@@ -62,7 +86,66 @@ services:
       timeout: 5s
       retries: 12
 
+  spark-master:
+    <<: *spark
+    container_name: spark-master
+    hostname: spark-master
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    environment:
+      SPARK_DAEMON_MEMORY: 256m
+    mem_limit: 1536m   # master daemon + the driver of jobs submitted from here
+    ports:
+      - "127.0.0.1:8080:8080"   # master UI
+      - "127.0.0.1:7077:7077"   # cluster RPC
+      - "127.0.0.1:4040:4040"   # UI of the running application
+    volumes:
+      - .:/opt/project:ro       # pipeline code, scripts and config
+      - spark-events:/opt/spark/spark-events
+    depends_on:
+      namenode:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  spark-worker-1:
+    <<: *spark-worker
+    container_name: spark-worker-1
+    hostname: spark-worker-1
+    ports:
+      - "127.0.0.1:8081:8081"
+
+  spark-worker-2:
+    <<: *spark-worker
+    container_name: spark-worker-2
+    hostname: spark-worker-2
+    ports:
+      - "127.0.0.1:8082:8081"
+
+  spark-worker-3:
+    <<: *spark-worker
+    container_name: spark-worker-3
+    hostname: spark-worker-3
+    ports:
+      - "127.0.0.1:8083:8081"
+
+  spark-history:
+    <<: *spark
+    container_name: spark-history
+    hostname: spark-history
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.history.HistoryServer"]
+    environment:
+      SPARK_DAEMON_MEMORY: 384m
+    mem_limit: 512m
+    ports:
+      - "127.0.0.1:18080:18080"
+    volumes:
+      - spark-events:/opt/spark/spark-events
+
 volumes:
   namenode:
   datanode-1:
   datanode-2:
+  spark-events:
