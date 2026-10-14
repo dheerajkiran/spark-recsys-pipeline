@@ -235,7 +235,19 @@ hdfs:///
 
 ## 7. Data model
 
-Input files and columns expected from KuaiRand. The exact file names and columns will be confirmed after download, and `pipeline/schemas.py` will be the source of truth.
+KuaiRand is downloaded from [Zenodo](https://zenodo.org/records/10439422) (CC BY-SA 4.0) by `scripts/download_data.sh`. The columns below were confirmed against KuaiRand-Pure; `pipeline/schemas.py` will be the source of truth.
+
+| File | Rows (Pure) | Content |
+|---|---|---|
+| `log_standard_4_08_to_4_21_pure.csv`, `log_standard_4_22_to_5_08_pure.csv` | 1.14M + 0.30M | Impressions served by the recommender. **Training source.** |
+| `log_random_4_22_to_5_08_pure.csv` | 1.19M | Videos inserted at random (`is_rand = 1`). Different exposure distribution, kept as an optional unbiased evaluation set. |
+| `user_features_pure.csv` | 27,285 | One row per user |
+| `video_features_basic_pure.csv` | 7,583 | One row per video |
+| `video_features_statistic_pure.csv` | 7,583 | One row per video, monthly averages. **Not used** (see below). |
+
+Facts observed in Pure:
+- Standard logs cover **2022-04-09 to 2022-05-08** (30 days). Volume is front-loaded: April 10–12 are the busiest days.
+- `is_click` positive rate is about **46%**, much higher than typical ad CTR, because an impression here is a video already shown in the feed.
 
 ### Interaction log (main fact table)
 
@@ -251,6 +263,8 @@ Input files and columns expected from KuaiRand. The exact file names and columns
 | `long_view` | int (0/1) | User watched a long portion (**alternative label**) |
 | `play_time_ms` | long | Time spent watching |
 | `duration_ms` | long | Video length |
+| `profile_stay_time`, `comment_stay_time` | long | Time spent on the author profile / comments |
+| `is_profile_enter` | int (0/1) | User opened the author's profile |
 | `tab` | int | Which app tab the event happened on |
 | `is_rand` | int (0/1) | Whether the video was shown randomly (not by the recommender) |
 
@@ -258,9 +272,11 @@ Input files and columns expected from KuaiRand. The exact file names and columns
 
 | Table | Grain | Example columns |
 |---|---|---|
-| User features | one row per user | activity level, registration days, follower/followee buckets, anonymized categorical features |
-| Video basic features | one row per video | author ID, video type, upload date, duration, music ID, tag |
-| Video statistics | one row per video per day | show/play/like/comment counts |
+| User features | one row per user | `user_active_degree` (string), `is_live_streamer`, `is_video_author`, follow/fans/friend counts and range buckets (quoted strings like `"[100,1k)"`), `register_days`, `onehot_feat0..17` |
+| Video basic features | one row per video | `author_id`, `video_type`, `upload_dt` (`YYYY-MM-DD`), `upload_type`, `video_duration`, `music_id`, `tag` (numbers stored as floats) |
+| Video statistics | one row per video | ~50 show/play/like/comment/share counts, each an **average of daily values over the whole month** |
+
+**Why video statistics are not used:** each value averages the full month, including the val and test days, so using it as a feature would leak future information. Item statistics are instead computed from the interaction logs per (`video_id`, `date`), using previous days only. That self-built table is the skewed large-to-large join in stage 4.
 
 ### Output (gold) schema
 
@@ -333,7 +349,7 @@ Key techniques:
 
 - Join interactions with user features on `user_id`.
 - **Broadcast join** with video metadata: this table is small enough to copy to every executor, so the large interaction table is not shuffled.
-- Join with daily video statistics on (`video_id`, `date`). This is large-to-large, and viral videos create hot keys, so it uses **salting** (see [engineering decisions](#12-engineering-decisions)).
+- Join with daily video statistics, computed in stage 3 from the logs, on (`video_id`, `date`). This is large-to-large, and viral videos create hot keys, so it uses **salting** (see [engineering decisions](#12-engineering-decisions)).
 - Result: one row per interaction with all features and the label.
 
 ### Stage 5. Split and write gold: `pipeline/build_dataset.py`

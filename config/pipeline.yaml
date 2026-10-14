@@ -1,0 +1,58 @@
+# Pipeline configuration. All paths, thresholds, labels and seeds live here.
+# Values are starting points and will be tuned as each phase is built.
+
+dataset:
+  version: pure                  # pure | 1k | 27k
+  local_dir: data/raw            # where scripts/download_data.sh extracts files
+  hdfs_raw: hdfs:///raw/kuairand
+  # log_standard_* (recommender-served impressions) is the training source.
+  # log_random_* (videos shown at random, is_rand=1) has a different exposure
+  # distribution; it is kept aside as an optional unbiased evaluation set.
+  use_random_log_for_eval: true
+
+paths:
+  bronze: hdfs:///bronze
+  silver: hdfs:///silver
+  features: hdfs:///features
+  gold: hdfs:///gold
+  metadata: hdfs:///gold/_metadata
+
+label: is_click                  # is_click | long_view
+
+split:
+  # Time-based split by event date (YYYYMMDD), inclusive ranges.
+  # Standard logs cover 2022-04-09 .. 2022-05-08 (30 days): 21 / 4 / 5 days.
+  # Pure is front-loaded (Apr 10-12 are the busiest days), so by rows this is
+  # roughly 88 / 6 / 6.
+  # Boundaries are fixed here (not computed in stage 5) because vocabularies and
+  # scaling statistics in stage 3 must be built from the training period only.
+  train: [20220409, 20220429]
+  val:   [20220430, 20220503]
+  test:  [20220504, 20220508]
+
+clean:
+  max_watch_ratio: 5.0           # cap play_time_ms / duration_ms
+  bot_event_rate_quantile: 0.999 # drop users above this daily event-rate quantile
+  max_removed_fraction: 0.10     # quality gate: fail if cleaning drops more
+
+features:
+  history_length: 20             # last-N video ids per user
+  session_gap_minutes: 30
+  min_count: 5                   # ids seen fewer times in train map to <UNK>
+  # Item statistics are computed from the logs per (video_id, date) and use
+  # previous days only. video_features_statistic_*.csv is NOT used: its values
+  # are monthly averages that include the val/test period (leakage).
+
+join:
+  salt_buckets: 8                # S for manual salting of the (video_id, date) join
+
+quality:
+  max_null_rate: 0.01
+  label_rate_band: [0.20, 0.70]  # is_click is ~46% in Pure; warn if positive rate per split falls outside
+
+spark:
+  shuffle_partitions: 24
+  adaptive_enabled: true
+  skew_join_enabled: true
+
+seed: 42
