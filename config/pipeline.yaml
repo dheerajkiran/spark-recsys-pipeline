@@ -5,6 +5,7 @@ dataset:
   version: pure                  # pure | 1k | 27k
   local_dir: data/raw            # where scripts/download_data.sh extracts files
   hdfs_raw: hdfs:///raw/kuairand
+  timezone: Asia/Shanghai        # KuaiRand times are Beijing time; event_date/hour use it
   # log_standard_* (recommender-served impressions) is the training source.
   # log_random_* (videos shown at random, is_rand=1) has a different exposure
   # distribution; it is kept aside as an optional unbiased evaluation set.
@@ -31,9 +32,16 @@ split:
   test:  [20220504, 20220508]
 
 clean:
-  max_watch_ratio: 5.0           # cap play_time_ms / duration_ms
-  bot_event_rate_quantile: 0.999 # drop users above this daily event-rate quantile
+  max_watch_ratio: 5.0           # cap play_time_ms at this x duration_ms (p99.9 in Pure is 4.94)
+  # Bot-like user-days are flagged on plausibility, not on a volume percentile:
+  # in Pure the heaviest user-days are fast scrollers (15 s+ median gap), not bots.
+  bot_min_events_per_day: 20
+  bot_max_median_gap_seconds: 2.0
+  bot_max_play_hours_per_day: 16
   max_removed_fraction: 0.10     # quality gate: fail if cleaning drops more
+
+write:
+  max_records_per_file: 2000000  # caps Parquet file size within a date partition
 
 features:
   history_length: 20             # last-N video ids per user

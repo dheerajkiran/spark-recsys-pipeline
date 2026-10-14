@@ -230,13 +230,13 @@ All host ports bind to `127.0.0.1`. HDFS and Spark run without authentication he
 ```
 hdfs:///
 ├── raw/kuairand/                  # original CSVs
-├── bronze/interactions/date=YYYYMMDD/
-├── bronze/users/
-├── bronze/videos/
-├── silver/interactions/date=YYYYMMDD/
+├── bronze/interactions/event_date=YYYYMMDD/   # standard + random logs (is_rand)
+├── bronze/users/  bronze/videos/  bronze/video_stats/
+├── silver/interactions/event_date=YYYYMMDD/
+├── silver/users/  silver/videos/
 ├── features/user/  features/item/  features/context/
 ├── gold/train/  gold/val/  gold/test/
-└── gold/_metadata/                # vocab maps, split boundaries, run stats
+└── gold/_metadata/                # vocab maps, split boundaries, run_stats/<stage>.json
 ```
 
 ---
@@ -255,7 +255,11 @@ KuaiRand is downloaded from [Zenodo](https://zenodo.org/records/10439422) (CC BY
 
 Facts observed in Pure:
 - Standard logs cover **2022-04-09 to 2022-05-08** (30 days). Volume is front-loaded: April 10–12 are the busiest days.
-- `is_click` positive rate is about **46%**, much higher than typical ad CTR, because an impression here is a video already shown in the feed.
+- `is_click` positive rate is about **46%**, much higher than typical ad CTR, because an impression here is a video already shown in the feed. In the random log it is about 18%.
+- **Time:** `time_ms` is the precise event time. `date` and `hourmin` are coarse: `hourmin` is always a whole hour, and the pair is logged up to about ±50 minutes away from `time_ms`, which puts 0.8% of rows on a different day. The pipeline therefore derives `event_date` and `event_hour` from `time_ms` (Beijing time) and uses only those.
+- **Shared timestamps:** 6% of events share an exact `time_ms` with other videos from the same user, most likely because one feed request serves several videos. History features must treat these as simultaneous (see [stage 3](#stage-3-feature-engineering-pipelinefeaturespy)).
+
+Full profile: `docker exec spark-master spark-submit /opt/project/scripts/profile_raw.py`.
 
 ### Interaction log (main fact table)
 
@@ -263,14 +267,15 @@ Facts observed in Pure:
 |---|---|---|
 | `user_id` | int | User identifier |
 | `video_id` | int | Video identifier |
-| `date` | int (YYYYMMDD) | Event date |
-| `hourmin` | int (HHMM) | Event time of day |
-| `time_ms` | long | Event timestamp in milliseconds |
+| `date` | int (YYYYMMDD) | Coarse logged date (kept, not used) |
+| `hourmin` | int (HH00) | Coarse logged hour (kept, not used) |
+| `time_ms` | long | Event timestamp in milliseconds: **the source of truth for time** |
+| `event_ts`, `event_date`, `event_hour` | timestamp, int, int | Derived from `time_ms` in Beijing time during ingest. `event_date` is the partition column. |
 | `is_click` | int (0/1) | User clicked the video (**primary label**) |
 | `is_like`, `is_follow`, `is_comment`, `is_forward`, `is_hate` | int (0/1) | Other feedback signals |
 | `long_view` | int (0/1) | User watched a long portion (**alternative label**) |
 | `play_time_ms` | long | Time spent watching |
-| `duration_ms` | long | Video length |
+| `duration_ms` | long | Video length. Null in silver when unknown (recorded as 0 for 237 videos). |
 | `profile_stay_time`, `comment_stay_time` | long | Time spent on the author profile / comments |
 | `is_profile_enter` | int (0/1) | User opened the author's profile |
 | `tab` | int | Which app tab the event happened on |
@@ -311,26 +316,33 @@ Each stage is a standalone PySpark script that reads one layer and writes the ne
 
 **Input:** `hdfs:///raw/` · **Output:** `hdfs:///bronze/`
 
-- Upload raw CSVs to HDFS with `hdfs dfs -put`.
-- Read with an **explicit schema** from `schemas.py`. `inferSchema` needs an extra full pass over the data and can guess types wrongly.
-- Cast types and build a proper `event_ts` timestamp from `time_ms`.
-- Write Parquet **partitioned by `date`**, so later stages that need a date range only read those directories (partition pruning).
-- Record row counts in a run-stats file.
+- Upload raw CSVs to HDFS with `scripts/load_to_hdfs.sh` (`hdfs dfs -put`).
+- Read with an **explicit schema** from `schemas.py` in `FAILFAST` mode, so a malformed row stops the job instead of silently becoming nulls. `inferSchema` needs an extra full pass over the data and guesses wrongly here: several ID columns are written as floats (`9.0`).
+- Cast types and derive `event_ts`, `event_date` and `event_hour` from `time_ms` in Beijing time.
+- Standard and random logs go into **one interactions table**, told apart by `is_rand`. They never share an event, and the bot check needs each user's full activity.
+- Write Parquet **partitioned by `event_date`**, so later stages that need a date range only read those directories (partition pruning). Each date is one file, sorted by user and time.
+- Ingest adds and removes no rows: a quality check compares bronze and raw row counts.
+- Record row counts in `gold/_metadata/run_stats/ingest.json`.
 
 ### Stage 2. Clean: `pipeline/clean.py`
 
 **Input:** `bronze` · **Output:** `silver`
 
-| Rule | Reason |
-|---|---|
-| Drop exact duplicate events (`user_id`, `video_id`, `time_ms`) | Logging retries produce duplicates that inflate counts |
-| Drop rows with null IDs or timestamps | Cannot be joined or ordered |
-| Drop rows with `play_time_ms < 0` or `duration_ms <= 0` | Physically impossible values |
-| Cap `play_time_ms / duration_ms` at a maximum (e.g. 5×) | Looping videos create extreme outliers |
-| Remove bot-like users (event rate above the 99.9th percentile per day) | Bots distort popularity and CTR features |
-| Fill missing categorical values with an explicit `UNKNOWN` | Keeps rows and makes missingness a learnable signal |
+The rules were set after profiling the raw data (`scripts/profile_raw.py`). Counts are for KuaiRand-Pure, standard and random logs together (2,622,668 rows).
 
-Every rule logs how many rows it removed, so over-aggressive cleaning is visible.
+| Rule | Evidence | Effect in Pure |
+|---|---|---|
+| Drop rows with null `user_id`, `video_id` or `time_ms` | None found; kept as a guard | 0 removed |
+| Collapse duplicate events (same `user_id`, `video_id`, `time_ms`) into one row, taking the **max** of each outcome column | 1.6% of standard-log events are logged 2–6 times. Copies differ mostly in the coarse hour; about 20 later copies carry more engagement (e.g. a click), so the max keeps the most complete record | 23,483 removed |
+| Drop rows with negative `play_time_ms` or `duration_ms` | None found; kept as a guard | 0 removed |
+| Treat `duration_ms = 0` as **unknown (null)** and keep the row | 237 videos have no recorded length anywhere (log or video table), but their impressions are real: 82% have play time, 23% are clicked. Dropping them would remove 2% of data and bias against those videos | 65,779 changed |
+| Cap `play_time_ms` at 5× `duration_ms` | Watch-ratio p99.9 is 4.94, max 68 (looping videos) | 1,923 changed |
+| Drop **bot-like user-days**: ≥ 20 events with a median gap under 2 s, or more than 16 h of play | The originally planned rule (users above the 99.9th percentile of daily events) would have removed 5.4% of rows. The heaviest user-days (up to 237 events) are fast scrollers with 15 s+ median gaps and under 1 h of play, not bots | 0 removed |
+| Dimension tables: missing strings → `UNKNOWN`, missing integer codes → `-1`, `tag` → `tags` (array of ints) | Nulls in 7 `onehot_feat` columns, `music_type`, `tag`; `tag` holds lists like `"12,60"` | No rows removed |
+
+Every rule logs how many rows it removed or changed (`gold/_metadata/run_stats/clean.json`), so over-aggressive cleaning is visible. In total, cleaning removed **0.90%** of interactions.
+
+`watch_ratio` is not stored in silver. It is a derived feature, computed in stage 3; storing it would add about 8 bytes of incompressible doubles per row (+33% silver size in Pure).
 
 ### Stage 3. Feature engineering: `pipeline/features.py`
 
@@ -339,13 +351,14 @@ Every rule logs how many rows it removed, so over-aggressive cleaning is visible
 Three feature groups are built separately and joined in stage 4. The full list is in the [feature catalog](#9-feature-catalog).
 
 Key techniques:
-- **Window functions** for per-user history, with frames that end at the row *before* the current one:
+- **Window functions** for per-user history, with frames that end *strictly before* the current event's timestamp:
   ```python
   w = (Window.partitionBy("user_id")
              .orderBy("time_ms")
-             .rowsBetween(Window.unboundedPreceding, -1))
+             .rangeBetween(Window.unboundedPreceding, -1))
   df = df.withColumn("user_hist_ctr", F.avg("is_click").over(w))
   ```
+  A row-based frame (`rowsBetween(..., -1)`) would leak: 6% of events share a timestamp with other videos from the same feed request, and a row frame lets one of them see its siblings' clicks. A range frame on `time_ms` excludes everything at the same moment.
 - **Repartition by `user_id`** once before all user window functions, so they share one shuffle.
 - **Point-in-time item statistics**: item popularity features use only days before the event date, never the same or later days.
 - **Categorical encoding**: IDs are mapped to contiguous integers (`0..V-1`) for embedding tables. IDs seen fewer than `min_count` times in the training period map to a shared `<UNK>` index. Vocabularies are built **from the training period only** and saved to `gold/_metadata/`.
@@ -409,8 +422,11 @@ See [model training](#11-model-training).
 |---|---|---|---|
 | Schema match | every stage | Column names and types equal the expected schema | Fail |
 | Non-empty output | every stage | Row count > 0 | Fail |
+| Row-count equality | ingest | Bronze rows = raw CSV rows (ingest only changes types) | Fail |
 | Row-count drift | clean | Rows removed ≤ 10% of input | Fail |
-| Primary-key uniqueness | clean | No duplicate (`user_id`, `video_id`, `time_ms`) | Fail |
+| Primary-key uniqueness | clean | No duplicate (`user_id`, `video_id`, `time_ms`); dimension keys unique | Fail |
+| No nulls in keys | clean | IDs, `time_ms`, `event_ts`, `event_date`, `play_time_ms` | Fail |
+| Value ranges | clean | Watch ratio in [0, 5]; `is_click`, `long_view`, `is_rand` in {0, 1} | Fail |
 | Null rate | features, gold | Each feature ≤ 1% nulls after fill | Fail |
 | Value ranges | features | Rates within [0, 1]; counts ≥ 0 | Fail |
 | Label balance | gold | Positive rate within expected band for each split | Warn |
@@ -479,7 +495,7 @@ Small tables (video metadata, vocab maps) are broadcast to every executor with `
 DataFrames reused by several feature builders (the cleaned interaction table) are `persist()`-ed and `unpersist()`-ed when no longer needed, to avoid recomputing them from HDFS.
 
 ### Leakage prevention
-- Window frames end at the previous row.
+- Window frames end strictly before the current event's timestamp (`rangeBetween`), so events from the same feed request never see each other.
 - Item statistics use previous days only.
 - Vocabularies and scaling statistics come from the training period only.
 - Train/val/test split is by time.
@@ -555,8 +571,12 @@ spark-recsys-pipeline/
 ├── scripts/
 │   ├── download_data.sh      # fetch KuaiRand / KuaiRec
 │   ├── load_to_hdfs.sh       # hdfs dfs -put raw files
-│   └── run_pipeline.sh       # spark-submit all stages in order
+│   ├── smoke_test.py         # phase 1 cluster check
+│   ├── profile_raw.py        # data profile behind the cleaning rules
+│   ├── run_pipeline.sh       # spark-submit all stages in order
+│   └── run_tests.sh          # pytest inside the spark-master container
 ├── pipeline/
+│   ├── common.py             # config, Spark session, run stats
 │   ├── schemas.py            # explicit Spark schemas
 │   ├── ingest.py             # raw → bronze
 │   ├── clean.py              # bronze → silver
@@ -580,9 +600,9 @@ spark-recsys-pipeline/
 
 ## 17. Running locally
 
-**Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, Python 3.10 for local tests and training, and about 20 GB of free disk.
+**Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, Python 3.10 for training, and about 20 GB of free disk. Tests run inside the cluster, so they need no local Python setup.
 
-Steps 1–3 work today (phase 1). The rest are _(planned)_.
+Steps 1–4 (ingest and clean only) and 6 work today. Step 5 and the remaining stages are _(planned)_.
 
 ```bash
 # 1. Start the cluster (first run builds the images, ~3 min)
@@ -595,14 +615,14 @@ docker compose up -d
 # 3. Check that Spark can read and write HDFS on all workers
 docker exec spark-master spark-submit /opt/project/scripts/smoke_test.py
 
-# 4. Run the pipeline (all stages)
+# 4. Run the pipeline (all stages), or chosen stages: ./scripts/run_pipeline.sh clean
 ./scripts/run_pipeline.sh
 
 # 5. Train
 python training/train_deepfm.py --config config/pipeline.yaml
 
-# 6. Run tests
-pytest tests/
+# 6. Run tests (inside the spark-master container)
+./scripts/run_tests.sh
 ```
 
 Web UIs:
