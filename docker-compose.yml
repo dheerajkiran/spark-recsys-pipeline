@@ -93,6 +93,7 @@ services:
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
     environment:
       SPARK_DAEMON_MEMORY: 256m
+      PYTHONPATH: /opt/project   # so stages can `import pipeline`
     mem_limit: 1536m   # master daemon + the driver of jobs submitted from here
     ports:
       - "127.0.0.1:8080:8080"   # master UI
