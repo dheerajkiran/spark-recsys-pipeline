@@ -89,7 +89,7 @@ A short primer on the ideas the rest of this README relies on.
 - **DataNode**: stores the actual blocks on its local disk. Our cluster has two.
 - **Block**: files are split into fixed-size blocks (128 MB by default) spread across DataNodes.
 - **Replication**: each block is copied to several DataNodes (the default is 3; we use 2 because we only have two DataNodes). If one node dies, the data is still readable.
-- **Data locality**: Spark prefers to schedule a task on the node that already holds the block it reads, so data does not cross the network.
+- **Data locality**: Spark prefers to schedule a task on the node that already holds the block it reads, so data does not cross the network. (In our Docker setup, Spark workers and DataNodes are separate containers, so every read goes over the Docker network. See [section 6](#6-cluster-configuration).)
 
 ### Spark
 
@@ -158,7 +158,7 @@ Taking the feature stage as an example:
 1. `spark-submit` starts the **driver**, which connects to the Spark master.
 2. The master assigns **executors** on the three workers.
 3. The driver reads the silver Parquet metadata from the NameNode and plans one task per input split.
-4. Executors read blocks directly from the DataNodes, preferring local blocks.
+4. Executors read blocks directly from the DataNodes (on a real cluster, preferring blocks stored on their own node).
 5. Narrow operations (filters, derived columns) run in place. A `groupBy user_id` triggers a shuffle, so rows with the same user end up in the same partition.
 6. Results are written back to HDFS as Parquet, one file per output partition.
 
@@ -168,11 +168,11 @@ Taking the feature stage as an example:
 
 | Layer | Technology | Where it is used | Why this choice |
 |---|---|---|---|
-| Storage | **HDFS** (Hadoop 3.3) | Holds the raw, bronze, silver and gold datasets | Distributed and fault-tolerant, and data locality lets Spark read blocks on the node where they are stored. It is the standard storage layer in the Hadoop ecosystem. |
-| Compute | **Apache Spark 3.5** (PySpark) | Every pipeline stage in `pipeline/` | In-memory distributed processing, the Catalyst query optimizer, and the DataFrame API. AQE helps with skew and shuffle sizing. |
+| Storage | **HDFS** (Hadoop 3.3.6) | Holds the raw, bronze, silver and gold datasets | Distributed and fault-tolerant, and data locality lets Spark read blocks on the node where they are stored. It is the standard storage layer in the Hadoop ecosystem. |
+| Compute | **Apache Spark 3.5.9** (PySpark) | Every pipeline stage in `pipeline/` | In-memory distributed processing, the Catalyst query optimizer, and the DataFrame API. AQE helps with skew and shuffle sizing. |
 | File format | **Apache Parquet** (Snappy compression) | Every layer after raw | Columnar storage with compression, predicate pushdown and column pruning. It is much faster to scan than CSV and stores the schema with the data. |
 | Cluster runtime | **Docker Compose** | `docker-compose.yml` | Runs the multi-node HDFS and Spark cluster on one laptop. Reproducible, and nothing to install beyond Docker. |
-| Language | **Python 3.11** | Pipeline, training and tooling | One language from ETL through to model training. |
+| Language | **Python 3.10** | Pipeline, training and tooling | One language from ETL through to model training. 3.10 is what the official Spark image ships, and the driver and executors must run the same Python version. |
 | ML training | **PyTorch 2.x** | `training/` | Industry standard for recommendation models, and it has a flexible `Dataset` and `DataLoader` for streaming Parquet. |
 | Parquet → tensors | **PyArrow** | `training/dataset.py` | Reads Parquet shards efficiently without going through pandas. |
 | Metrics | **scikit-learn** | `training/` | Standard AUC and log-loss implementations. |
@@ -193,17 +193,25 @@ Taking the feature stage as an example:
 
 ## 6. Cluster configuration
 
-Planned starting values, sized to fit a laptop with 16 GB of RAM. They will be tuned in phase 1.
+Sized to fit a laptop with 16 GB of RAM, with about 11 GB given to Docker. Built and verified in phase 1 on an Apple Silicon Mac with [OrbStack](https://orbstack.dev/).
+
+**Images**
+- **Hadoop:** the official `apache/hadoop` images are amd64-only, so `docker/hadoop/Dockerfile` builds our own from the Apache 3.3.6 release tarball (the aarch64 or x86 build, picked automatically and checked against its SHA-512) on `eclipse-temurin:11-jre`. Hadoop 3.3 supports Java 8 and 11 at runtime.
+- **Spark:** `docker/spark/Dockerfile` is a thin layer over the official multi-arch `apache/spark:3.5.9-java17-python3` (Python 3.10). It adds `spark-defaults.conf`, the pipeline's Python dependencies, and an event-log directory.
+
+All host ports bind to `127.0.0.1`. HDFS and Spark run without authentication here, so they are not reachable from the local network.
 
 ### Containers
 
 | Service | Image base | Role | Resources | Ports |
 |---|---|---|---|---|
-| `namenode` | Apache Hadoop 3.3 | HDFS metadata | 1 GB | 9870 (UI), 9000 (RPC) |
-| `datanode-1`, `datanode-2` | Apache Hadoop 3.3 | HDFS block storage | 1 GB each | 9864 (UI) |
-| `spark-master` | Apache Spark 3.5 | Cluster manager | 1 GB | 8080 (UI), 7077 (RPC) |
-| `spark-worker-1..3` | Apache Spark 3.5 | Executors | 2 cores, 2 GB each | 8081–8083 (UI) |
-| `spark-history` | Apache Spark 3.5 | History Server for finished jobs | 512 MB | 18080 (UI) |
+| `namenode` | Hadoop 3.3.6 (own build) | HDFS metadata | 1 GB | 9870 (UI), 9000 (RPC) |
+| `datanode-1`, `datanode-2` | Hadoop 3.3.6 (own build) | HDFS block storage | 1 GB each | 9864, 9865 (UI) |
+| `spark-master` | Spark 3.5.9 | Cluster manager; also runs the driver of jobs submitted from it | 1.5 GB | 8080 (UI), 7077 (RPC), 4040 (app UI) |
+| `spark-worker-1..3` | Spark 3.5.9 | One executor each (2 cores, 1 GB heap) | 2 cores, 2 GB each | 8081–8083 (UI) |
+| `spark-history` | Spark 3.5.9 | History Server for finished jobs | 512 MB | 18080 (UI) |
+
+**Data locality caveat:** Spark workers and DataNodes run in separate containers, so executors never find a block on their own "node" and every HDFS read crosses the Docker network. On one laptop this costs little, since the network is virtual. Co-locating a DataNode and a worker in one container is a possible later experiment.
 
 ### Key Spark settings
 
@@ -215,7 +223,7 @@ Planned starting values, sized to fit a laptop with 16 GB of RAM. They will be t
 | `spark.sql.autoBroadcastJoinThreshold` | `10MB` (default) | Small tables broadcast automatically; we also broadcast explicitly where needed |
 | `spark.serializer` | `KryoSerializer` | Faster and more compact than Java serialization |
 | `spark.eventLog.enabled` | `true` | Needed for the History Server and benchmark evidence |
-| `dfs.replication` (HDFS) | `2` | Matches the number of DataNodes |
+| `dfs.replication` (HDFS) | `2` | Matches the number of DataNodes. Also set as `spark.hadoop.dfs.replication`, because Spark's HDFS client does not read the cluster's `hdfs-site.xml` and would otherwise write files with 3 replicas |
 
 ### HDFS directory layout
 
@@ -570,25 +578,30 @@ spark-recsys-pipeline/
 
 ---
 
-## 17. Running locally _(planned)_
+## 17. Running locally
 
-**Requirements:** Docker Desktop with at least 10 GB of memory allocated, Python 3.11, and about 20 GB of free disk.
+**Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, Python 3.10 for local tests and training, and about 20 GB of free disk.
+
+Steps 1–3 work today (phase 1). The rest are _(planned)_.
 
 ```bash
-# 1. Start the cluster
+# 1. Start the cluster (first run builds the images, ~3 min)
 docker compose up -d
 
 # 2. Download the data and load it into HDFS
-./scripts/download_data.sh
-./scripts/load_to_hdfs.sh
+./scripts/download_data.sh pure
+./scripts/load_to_hdfs.sh pure
 
-# 3. Run the pipeline (all stages)
+# 3. Check that Spark can read and write HDFS on all workers
+docker exec spark-master spark-submit /opt/project/scripts/smoke_test.py
+
+# 4. Run the pipeline (all stages)
 ./scripts/run_pipeline.sh
 
-# 4. Train
+# 5. Train
 python training/train_deepfm.py --config config/pipeline.yaml
 
-# 5. Run tests
+# 6. Run tests
 pytest tests/
 ```
 
@@ -597,7 +610,9 @@ Web UIs:
 | UI | URL |
 |---|---|
 | HDFS NameNode | http://localhost:9870 |
+| HDFS DataNodes | http://localhost:9864, http://localhost:9865 |
 | Spark master | http://localhost:8080 |
+| Spark workers | http://localhost:8081 – 8083 |
 | Spark application (while a job runs) | http://localhost:4040 |
 | Spark History Server | http://localhost:18080 |
 
