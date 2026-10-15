@@ -94,3 +94,10 @@ def check_finite(df: DataFrame, cols: list, name: str) -> None:
     if n:
         _fail(f"{name} finite", f"{n:,} rows with NaN or infinity")
     _pass(f"{name} finite", f"{len(cols)} columns")
+
+
+def check_true(condition: bool, name: str, detail: str) -> None:
+    """A yes/no condition computed by the caller; `detail` explains the values."""
+    if not condition:
+        _fail(name, detail)
+    _pass(name, detail)

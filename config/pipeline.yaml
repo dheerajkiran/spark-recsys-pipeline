@@ -43,6 +43,11 @@ clean:
 write:
   max_records_per_file: 2000000  # caps Parquet file size within a date partition
 
+gold:
+  # Files per split. Training shards files across DataLoader workers, so train
+  # gets several; rows inside are in a deterministic pseudo-random order.
+  files: {train: 8, val: 2, test: 2, test_random: 2}
+
 features:
   history_length: 20             # last-N video ids per user
   # The history window looks back history_length + tie_slack rows and then drops
@@ -69,6 +74,7 @@ join:
 quality:
   max_null_rate: 0.01
   label_rate_band: [0.20, 0.70]  # is_click is ~46% in Pure; warn if positive rate per split falls outside
+  label_rate_band_random: [0.10, 0.30]  # random-log exposures: ~18% click rate in Pure
 
 spark:
   shuffle_partitions: 24
