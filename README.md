@@ -237,8 +237,9 @@ hdfs:///
 ├── features/events/event_date=YYYYMMDD/       # one row per event: labels, history, context, cross
 ├── features/item_daily/  features/author_daily/   # previous-day stats per (key, date)
 ├── features/user_static/  features/video_static/  # encoded dimension tables
-├── gold/train/  gold/val/  gold/test/
-└── gold/_metadata/                # vocab/<name>/, vocab_sizes.json, run_stats/<stage>.json
+├── gold/train/  gold/val/  gold/test/  gold/test_random/   # model-ready, shuffled, fixed file count
+└── gold/_metadata/                # feature_spec.json, scaling_stats.json, vocab/<name>/,
+                                   # vocab_sizes.json, run_stats/<stage>.json
 ```
 
 ---
@@ -295,17 +296,17 @@ Full profile: `docker exec spark-master spark-submit /opt/project/scripts/profil
 
 ### Output (gold) schema
 
-One row per interaction:
+One row per interaction, 74 columns. `gold/_metadata/feature_spec.json` lists every column by role, so training code reads the spec instead of hard-coding names:
 
 ```
-label           : int        # is_click (or long_view)
-user_idx        : int        # encoded user ID
-video_idx       : int        # encoded video ID
-author_idx      : int
-<categorical>_idx : int      # all other encoded categorical features
-<numeric>       : float      # scaled numeric features
-hist_video_idx  : array<int> # last N viewed videos, left-padded with 0
-date            : int        # kept for partitioning, dropped at training time
+label              : int         # is_click (or long_view, set by `label` in config)
+user_id, video_id, time_ms       # event key, kept for traceability; not features
+37 categorical     : int         # user_idx, video_idx, author_idx, music_idx, tab_idx,
+                                 # hour_of_day, day_of_week, video/user categorical *_idx
+22 numeric         : float       # log1p where heavy-tailed, standardized with train stats
+9 <col>_missing    : int         # 1 where the numeric had no information yet
+hist_video_idx     : array<int>  # last 20 viewed videos, left-padded with 0
+event_date         : int         # for analysis; not a feature
 ```
 
 Every vocabulary uses the same index layout: `0` = padding, `1` = unknown (rare, unseen, or null), `2..` = known values, most frequent first.
@@ -398,19 +399,31 @@ The nulls are real "no information yet" cases. Stage 4 fills them and adds missi
 **Input:** `features/` · **Output:** a joined DataFrame (in memory)
 
 - Start from `features/events` (one row per interaction, labels included).
-- Join `user_static` on `user_id`.
-- **Broadcast join** with `video_static`: this table is small enough to copy to every executor, so the large event table is not shuffled.
-- Join `item_daily` on (`video_id`, `event_date`) and `author_daily` on (`author_id`, `event_date`). These are large-to-large, and viral videos create hot keys, so the video join uses **salting** (see [engineering decisions](#12-engineering-decisions)).
-- **Fill nulls and scale numerics** (moved here from stage 3). Rates with no history yet are filled with a neutral value and get a missing-value indicator. Heavy-tailed counts get `log1p`. Every numeric is standardized with mean and standard deviation from **training rows only**, and those statistics are saved to `gold/_metadata/`.
+- **Broadcast joins** with `user_static` and `video_static`: both are small enough to copy to every executor, so the event table is not shuffled.
+- Join `item_daily` on (`video_id`, `event_date`) and `author_daily` on (`author_id`, `event_date`). How the `item_daily` join runs is configurable (`join.item_daily_strategy`): **broadcast** (default), **salted**, or plain **sortmerge**. All three give identical rows, both in unit tests and on the full Pure data (same checksum). Why broadcast is the default is in [skew handling](#skew-handling).
+- Checks: no fan-out (2,599,185 rows in and out), unique event keys, and every event matched in all four tables.
+- **Fill nulls and scale numerics** (moved here from stage 3, because the statistics need the joined training rows):
+  - Statistics come from **training rows only** (standard log, training dates) and are saved to `gold/_metadata/scaling_stats.json`.
+  - 13 heavy-tailed counts and durations get `log1p` (clipped at 0 first, so a negative count can never become −∞). Then every one of the 22 numerics is standardized: `(x − train mean) / train std`.
+  - Nulls mean "no information yet" (first event, first day, unknown duration). They become the training mean, i.e. exactly 0 after scaling, and each of the 9 nullable columns gets a `<col>_missing` flag, so the model can tell "average" from "unknown".
+  - Mean and std are rounded to 9 decimals, so last-bit noise in float sums cannot change the output between runs.
 - Result: one row per interaction with all features and the label.
 
 ### Stage 5. Split and write gold: `pipeline/build_dataset.py`
 
-**Output:** `hdfs:///gold/{train,val,test}/`
+**Output:** `hdfs:///gold/{train,val,test,test_random}/` and `gold/_metadata/feature_spec.json`
 
-- **Time-based split**, for example: first ~70% of days → train, next ~15% → val, last ~15% → test. The exact date boundaries are saved to `_metadata`.
-- A random split would put future events in training and past events in test, which inflates offline metrics and does not reflect how the model is used in production.
-- Write Parquet with a controlled number of files (`repartition` before write) so training readers are not slowed down by thousands of tiny files.
+| Split | Source | Dates | Rows (Pure) | Click rate | Files |
+|---|---|---|---|---|---|
+| `train` | standard log | Apr 9 – Apr 29 | 1,262,136 | 46.6% | 8 |
+| `val` | standard log | Apr 30 – May 3 | 78,444 | 46.2% | 2 |
+| `test` | standard log | May 4 – May 8 | 72,556 | 44.5% | 2 |
+| `test_random` | random log | May 4 – May 8 | 527,007 | 18.2% | 2 |
+
+- **Time-based split.** A random split would put future events in training and past events in test, which inflates offline metrics and does not reflect how the model is used in production.
+- **`test_random`** holds videos the app showed at random, not ones the recommender picked. Evaluating on it shows how well the model ranks *any* video, not just the ones the old recommender already favoured. Random-log rows on train and val dates (659,042) are not used, so training stays on the recommender's own distribution.
+- **Shuffled, fixed-size files.** Rows are ordered by a seeded hash of the event key, so training batches are not time-ordered and every run writes the same bytes. Each split gets a fixed number of files (`gold.files`), so training readers are not slowed by many tiny files and DataLoader workers get even shares. (A first version reduced the hash to 8 values before repartitioning. Spark hashed those 8 values again, collisions left half the files empty, and train got 4 files instead of 8. A file-count check and a unit test now guard against this.)
+- **`feature_spec.json`** lists every categorical column with its embedding size, the numerics, the flags, the history sequence, the label, and each split's dates and row count.
 
 ### Stage 6. Data-quality gates: `pipeline/quality_checks.py`
 
@@ -459,10 +472,14 @@ See [model training](#11-model-training).
 | Leakage: first events | features | Every user's first event has no history; every video's / author's first day has no previous-day stats | Fail |
 | Value ranges | features | Rates within [0, 1]; history length within [0, N] and every list exactly N long; ages, gaps, positions positive | Fail |
 | Static tables | features | One row per silver user / video; no null indices | Fail |
-| Null rate | gold | Each feature ≤ 1% nulls after fill | Fail |
-| Label balance | gold | Positive rate within expected band for each split | Warn |
-| Split integrity | gold | max(train date) < min(val date) < min(test date) | Fail |
-| Join fan-out | aggregate | Row count after joins equals row count before | Fail |
+| Join fan-out and matches | build_dataset | Rows after all joins = event rows; event keys unique; every event matched in user, video, item-daily and author-daily tables | Fail |
+| Scaling | build_dataset | No nulls or NaN/infinity in numerics; on training rows every scaled column has mean 0 and std ≤ 1 | Fail |
+| Row accounting | gold | train + val + test = all standard-log rows; test_random = all random-log test rows | Fail |
+| Split integrity | gold | max(train date) < min(val date), max(val date) < min(test date) | Fail |
+| No nulls, same schema | gold | Every split, every column | Fail |
+| Indices fit vocabularies | gold | Every categorical and history index < its embedding size | Fail |
+| File count | gold | Each split has its configured number of files | Fail |
+| Label balance | gold | Positive rate within the expected band (separate band for the random log) | Warn |
 
 The join fan-out check catches a common and silent bug: a dimension table with duplicate keys multiplies rows during a join.
 
@@ -509,18 +526,24 @@ These are the parts of the project that go beyond "it runs." Each one will be ba
 - **Output files:** controlled file count per partition to avoid the "small files problem," where HDFS NameNode memory and read overhead grow with the number of files.
 
 ### Skew handling
-Viral videos create hot keys in the (`video_id`, `date`) join. We compare three approaches on the same data:
+Viral videos create hot keys in the (`video_id`, `event_date`) join. Measured in Pure before choosing a strategy:
+
+- **Keys are very skewed:** the busiest (video, date) has 3,430 events against a median of 9 (about 380×), and the top 5 keys hold 0.6% of all events.
+- **Partitions are not:** a 24-way shuffle by that key puts thousands of keys in each partition, and the busiest partition holds only 1.08× the median.
+- **`item_daily` is 3 MB**, so a broadcast join needs no shuffle at all.
+
+So the default is **broadcast**. Pure timings for the stage: broadcast 12 s, sort-merge 14 s, salted 18 s (salting copies `item_daily` 8× for no benefit here). Salting is kept, with an equivalence test, for when both sides are too big to broadcast, as with KuaiRand-27K.
 
 | Approach | How it works |
 |---|---|
-| Naive join | Plain sort-merge join with AQE disabled. Expect one or a few very slow tasks. |
+| Naive join | Plain sort-merge join with AQE disabled. Expect one or a few very slow tasks when partitions are skewed. |
 | AQE skew join | Spark detects oversized partitions at runtime and splits them. |
-| Manual salting | Add a random salt `0..S-1` to the hot side's key, replicate the other side `S` times with each salt value, and join on (key, salt). Load is spread over `S` partitions. |
+| Manual salting | Each event gets a salt `0..S-1` from a hash of its key (not `rand()`, so every run puts each row in the same bucket). The other side is replicated `S` times, once per salt value, and the join is on (key, salt). A hot key's load is spread over `S` partitions. |
 
-For each, we record the stage time and the max/median task duration from the Spark UI.
+For the phase 6 benchmark to show a real effect, it needs partitions that are actually skewed: broadcast disabled, plus a larger dataset (1K or a slice of 27K) or more shuffle partitions so that hot keys dominate their partition. We record the stage time and the max/median task duration from the Spark UI.
 
 ### Broadcast joins
-Small tables (video metadata, vocab maps) are broadcast to every executor with `F.broadcast(...)`, so the large interaction table is not shuffled for those joins.
+Small tables (user and video features, `item_daily` in Pure, vocabularies, per-date global click rates) are broadcast to every executor with `F.broadcast(...)`, so the large event table is not shuffled for those joins.
 
 ### Caching
 DataFrames reused by several feature builders (the cleaned interaction table) are `persist()`-ed and `unpersist()`-ed when no longer needed, to avoid recomputing them from HDFS.
@@ -534,7 +557,8 @@ DataFrames reused by several feature builders (the cleaned interaction table) ar
 ### Reproducibility
 - All paths, thresholds and seeds live in `config/pipeline.yaml`.
 - **Same input, same bytes out.** Rebuilding silver and features from scratch gives identical values in every column (checked with per-column checksums across 3 rebuilds). This needed one fix: after a shuffle, Spark does not fix the order of rows that tie in a window's sort key (same-timestamp events), and floating-point addition depends on order. Averages of watch ratios therefore differed in the last bits between rebuilds. They are now summed as exact decimals and converted to doubles only at the end. Integer sums and counts were already exact. Vocabulary ties are broken by value, and history lists are ordered by (`time_ms`, `video_id`), so both are deterministic too.
-- Every run writes its stats (row counts, timings, config hash) to `gold/_metadata/`.
+- The gold dataset is also identical across runs (checksums of every split). Scaling statistics are rounded to 9 decimals, and the training shuffle is a seeded hash, not `rand()`.
+- Every stage writes its stats (row counts, timings, and a 12-character hash of the full config) to `gold/_metadata/run_stats/<stage>.json`, so any output can be traced to the settings that produced it.
 
 ---
 
@@ -635,7 +659,7 @@ spark-recsys-pipeline/
 
 **Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, Python 3.10 for training, and about 20 GB of free disk. Tests run inside the cluster, so they need no local Python setup.
 
-Steps 1–4 (ingest, clean and features) and 6 work today. Step 5 and the remaining stages are _(planned)_.
+Steps 1–4 (the whole data pipeline, raw CSV to gold) and 6 work today. Step 5 (training) is _(planned)_.
 
 ```bash
 # 1. Start the cluster (first run builds the images, ~3 min)
@@ -648,7 +672,8 @@ docker compose up -d
 # 3. Check that Spark can read and write HDFS on all workers
 docker exec spark-master spark-submit /opt/project/scripts/smoke_test.py
 
-# 4. Run the pipeline (all stages), or chosen stages: ./scripts/run_pipeline.sh clean
+# 4. Run the pipeline: ingest, clean, features, build_dataset (~2.5 min on Pure),
+#    or chosen stages: ./scripts/run_pipeline.sh build_dataset
 ./scripts/run_pipeline.sh
 
 # 5. Train
