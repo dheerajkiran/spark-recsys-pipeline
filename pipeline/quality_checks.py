@@ -83,3 +83,21 @@ def check_constant_within(df: DataFrame, keys: list, cols: list, name: str) -> N
     if bad:
         _fail(f"{name} constant within {keys}", f"groups with differing values: {bad}")
     _pass(f"{name} constant within {keys}", f"{len(cols)} columns")
+
+
+def check_finite(df: DataFrame, cols: list, name: str) -> None:
+    """No NaN or +/-infinity in any of `cols`."""
+    bad_rows = F.lit(False)
+    for c in cols:
+        bad_rows = bad_rows | F.isnan(c) | (F.abs(F.col(c)) == float("inf"))
+    n = df.filter(bad_rows).count()
+    if n:
+        _fail(f"{name} finite", f"{n:,} rows with NaN or infinity")
+    _pass(f"{name} finite", f"{len(cols)} columns")
+
+
+def check_true(condition: bool, name: str, detail: str) -> None:
+    """A yes/no condition computed by the caller; `detail` explains the values."""
+    if not condition:
+        _fail(name, detail)
+    _pass(name, detail)
