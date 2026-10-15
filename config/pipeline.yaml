@@ -59,7 +59,12 @@ features:
   # are monthly averages that include the val/test period (leakage).
 
 join:
-  salt_buckets: 8                # S for manual salting of the (video_id, date) join
+  # How to join item_daily on (video_id, event_date): broadcast | salted | sortmerge.
+  # In Pure, item_daily is 3 MB and a 24-way shuffle by that key is balanced
+  # (busiest partition 1.08x the median), so broadcast is best. Salting is for
+  # when both sides are too large to broadcast (e.g. KuaiRand-27K).
+  item_daily_strategy: broadcast
+  salt_buckets: 8                # S for the salted strategy
 
 quality:
   max_null_rate: 0.01
