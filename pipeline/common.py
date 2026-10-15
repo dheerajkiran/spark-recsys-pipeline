@@ -1,6 +1,7 @@
 """Shared helpers for pipeline stages: config, Spark session, run stats."""
 
 import argparse
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -46,6 +47,12 @@ def write_text(spark: SparkSession, path: str, text: str) -> None:
         out.close()
 
 
+def config_hash(cfg: dict) -> str:
+    """Short fingerprint of the full config: two outputs with the same hash were
+    built with the same settings."""
+    return hashlib.sha256(json.dumps(cfg, sort_keys=True).encode()).hexdigest()[:12]
+
+
 class RunStats:
     """Collects row counts and timings for one stage and saves them as JSON."""
 
@@ -53,7 +60,8 @@ class RunStats:
         self.stage = stage
         self.cfg = cfg
         self.started = time.time()
-        self.stats: dict = {"stage": stage, "dataset": cfg["dataset"]["version"]}
+        self.stats: dict = {"stage": stage, "dataset": cfg["dataset"]["version"],
+                            "config_hash": config_hash(cfg)}
 
     def record(self, key: str, value) -> None:
         self.stats[key] = value
