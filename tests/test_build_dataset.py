@@ -81,3 +81,32 @@ def test_constant_column_and_negative_counts_stay_finite(spark):
     assert stats["c"]["std"] == 1.0                         # no division by zero
     vals = [v for r in apply_scaler(df, stats, []).collect() for v in (r.c, r.n)]
     assert all(v == v and abs(v) != float("inf") for v in vals)  # no NaN, no inf
+
+
+from pipeline.build_dataset import shuffled, split_rows  # noqa: E402
+
+SPLIT_CFG = {"train": [1, 10], "val": [11, 12], "test": [13, 15]}
+
+
+def test_split_by_date_and_log(spark):
+    rows = [(d, r) for d in range(1, 16) for r in (0, 1)]
+    df = spark.createDataFrame(rows, "event_date int, is_rand int")
+    parts = {k: sorted((r.event_date, r.is_rand) for r in v.collect()) for k, v in split_rows(df, SPLIT_CFG).items()}
+    assert parts["train"] == [(d, 0) for d in range(1, 11)]
+    assert parts["val"] == [(11, 0), (12, 0)]
+    assert parts["test"] == [(13, 0), (14, 0), (15, 0)]
+    assert parts["test_random"] == [(13, 1), (14, 1), (15, 1)]   # random rows on train/val dates unused
+
+
+def test_shuffle_keeps_rows_breaks_time_order_and_is_deterministic(spark):
+    df = spark.createDataFrame([(u, 1, t) for u in range(5) for t in range(40)],
+                               "user_id int, video_id int, time_ms long")
+    a = shuffled(df, 4, seed=42)
+    b = shuffled(df.orderBy("time_ms", ascending=False), 4, seed=42)   # different input order
+    rows = lambda d: [tuple(r) for r in d.collect()]                   # noqa: E731
+    assert sorted(rows(a)) == sorted(rows(df))                         # same rows, none lost
+    assert rows(a) == rows(b)                                          # same output order
+    assert rows(a) != sorted(rows(a), key=lambda r: r[2])              # not time-ordered
+    assert rows(shuffled(df, 4, seed=7)) != rows(a)                    # the seed matters
+    sizes = a.rdd.glom().map(len).collect()
+    assert len(sizes) == 4 and min(sizes) > 0                          # every file gets rows

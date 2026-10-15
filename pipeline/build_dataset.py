@@ -19,6 +19,14 @@ Numerics are then filled and scaled with statistics from training rows only
 (standard log, training dates): heavy-tailed counts get log1p, every numeric
 is standardized, and nulls ("no information yet") become the training mean,
 i.e. exactly 0 after scaling, with a <col>_missing flag beside them.
+
+Stage 5 splits by date (split.* in config) and writes gold/:
+- train, val, test:  standard-log rows (the recommender's own exposures).
+- test_random:       random-log rows on test dates, an unbiased test set.
+Random-log rows on train/val dates are not used. Rows are written in a
+deterministic pseudo-random order (a hash of the event), so training batches
+are not time-ordered and every run writes the same files.
+gold/_metadata/feature_spec.json tells the training code what each column is.
 """
 
 import json
@@ -26,6 +34,7 @@ import json
 from pyspark.sql import DataFrame, functions as F
 
 from pipeline import quality_checks as qc
+from pipeline import schemas as S
 from pipeline.common import RunStats, build_spark, load_config, parse_args, write_text
 
 EVENT_KEY = ["user_id", "video_id", "time_ms"]
@@ -57,6 +66,56 @@ NULLABLE = [
     "author_ctr_prev", "author_avg_watch_ratio_prev",
 ]
 STAT_DECIMALS = 9
+
+# Categorical fields (embedding lookups) and where their vocabulary sizes come from.
+_USER_CAT = [c for c in S.USER_STATIC.fieldNames() if c.endswith("_idx")]
+_VIDEO_CAT = [c for c in S.VIDEO_STATIC.fieldNames() if c.endswith("_idx")]
+CATEGORICAL = _USER_CAT + _VIDEO_CAT + ["tab_idx", "hour_of_day", "day_of_week"]
+FIXED_VOCAB = {"hour_of_day": 24, "day_of_week": 8}   # raw values 0..23 and 1..7
+FLAGS = [f"{c}_missing" for c in NULLABLE]
+SEQUENCE = "hist_video_idx"                            # shares the video_id vocabulary
+ID_COLS = EVENT_KEY                                    # kept for traceability, not features
+SPLITS = ("train", "val", "test", "test_random")
+
+
+def vocab_name(col: str) -> str:
+    """vocab_sizes.json key for a categorical column, e.g. user_idx -> user_id."""
+    base = col[:-len("_idx")]
+    return f"{base}_id" if base in ("user", "video", "author", "music") else base
+
+
+def gold_columns() -> list:
+    return ["label", *ID_COLS, *CATEGORICAL, *NUMERIC, *FLAGS, SEQUENCE, "event_date"]
+
+
+def split_rows(df: DataFrame, split_cfg: dict) -> dict:
+    """Split by event date. Standard-log rows -> train/val/test; random-log rows
+    on test dates -> test_random."""
+    def dates(name):
+        lo, hi = split_cfg[name]
+        return F.col("event_date").between(lo, hi)
+    standard, rand = F.col("is_rand") == 0, F.col("is_rand") == 1
+    return {
+        "train": df.filter(standard & dates("train")),
+        "val": df.filter(standard & dates("val")),
+        "test": df.filter(standard & dates("test")),
+        "test_random": df.filter(rand & dates("test")),
+    }
+
+
+def shuffled(df: DataFrame, n_files: int, seed: int) -> DataFrame:
+    """Deterministic pseudo-random order: hash the event key with a seed, spread
+    rows over n_files partitions by that hash, and sort each by it.
+
+    Partition by the hash itself: reducing it to n_files values first (pmod)
+    would be hashed again by repartition, and n values hashed into n buckets
+    collide, leaving some files empty (it gave 4 train files instead of 8).
+    """
+    h = F.xxhash64(*EVENT_KEY, F.lit(seed))
+    return (df.withColumn("_h", h)
+            .repartition(n_files, "_h")
+            .sortWithinPartitions("_h")
+            .drop("_h"))
 
 
 def join_item_daily(events: DataFrame, item_daily: DataFrame, strategy: str,
@@ -154,6 +213,55 @@ def check_scaled(scaled: DataFrame, train_lo: int, train_hi: int) -> None:
     qc.check_equal_counts(0, len(off_std), f"scaled train columns with std outside (0, 1] {off_std or ''}")
 
 
+def check_gold(spark, cfg: dict, spec: dict, scaled: DataFrame, stats: RunStats) -> None:
+    gold = cfg["paths"]["gold"]
+    parts = {name: spark.read.parquet(f"{gold}/{name}") for name in SPLITS}
+
+    # Row accounting: every standard-log row lands in exactly one of
+    # train/val/test, and test_random holds every random-log row on test dates.
+    n_standard = scaled.filter("is_rand = 0").count()
+    lo, hi = cfg["split"]["test"]
+    n_random_test = scaled.filter((F.col("is_rand") == 1) & F.col("event_date").between(lo, hi)).count()
+    qc.check_equal_counts(n_standard, sum(parts[n].count() for n in ("train", "val", "test")),
+                          "gold train + val + test == standard-log rows")
+    qc.check_equal_counts(n_random_test, parts["test_random"].count(), "gold test_random == random-log test rows")
+
+    for name, df in parts.items():
+        n_files, want = len(df.inputFiles()), cfg["gold"]["files"][name]
+        qc.check_true(n_files == want, f"gold.{name} file count", f"{n_files} files (configured {want})")
+
+    # Split integrity: strictly increasing, non-overlapping date ranges.
+    rng = {n: parts[n].agg(F.min("event_date"), F.max("event_date")).first() for n in ("train", "val", "test")}
+    qc.check_true(rng["train"][1] < rng["val"][0] and rng["val"][1] < rng["test"][0],
+                  "gold split dates ordered train < val < test",
+                  f"train ends {rng['train'][1]}, val {rng['val'][0]}..{rng['val'][1]}, test starts {rng['test'][0]}")
+
+    for name, df in parts.items():
+        # Randomly shown videos are clicked far less, so test_random has its own band.
+        band = cfg["quality"]["label_rate_band_random" if name == "test_random" else "label_rate_band"]
+        qc.check_schema(df, parts["train"].schema, f"gold.{name}")
+        qc.check_no_nulls(df, df.columns, f"gold.{name}")
+        rate = df.agg(F.avg("label")).first()[0]
+        stats.record(f"{name}_label_rate", round(rate, 4))
+        if not band[0] <= rate <= band[1]:
+            print(f"[WARN] gold.{name} label rate {rate:.3f} outside expected band {band}")
+
+    # Every index must fit its embedding table, or training fails (or worse,
+    # silently reads the wrong row on some backends).
+    for name, df in parts.items():
+        maxes = df.agg(*[F.max(c["name"]).alias(c["name"]) for c in spec["categorical"]],
+                       F.max(F.array_max(SEQUENCE)).alias(SEQUENCE),
+                       F.min(F.size(SEQUENCE)).alias("min_len"), F.max(F.size(SEQUENCE)).alias("max_len")).first()
+        too_big = {c["name"]: maxes[c["name"]] for c in spec["categorical"] if maxes[c["name"]] >= c["vocab_size"]}
+        if maxes[SEQUENCE] >= spec["sequence"]["vocab_size"]:
+            too_big[SEQUENCE] = maxes[SEQUENCE]
+        qc.check_equal_counts(0, len(too_big), f"gold.{name} indices outside their vocabulary {too_big or ''}")
+        n = spec["sequence"]["length"]
+        qc.check_true(maxes["min_len"] == maxes["max_len"] == n, f"gold.{name} {SEQUENCE} length",
+                      f"every list has length {n}" if maxes["min_len"] == maxes["max_len"] == n
+                      else f"lengths range {maxes['min_len']}..{maxes['max_len']}, expected {n}")
+
+
 def main() -> None:
     args = parse_args(__doc__)
     cfg = load_config(args.config)
@@ -184,6 +292,34 @@ def main() -> None:
     write_text(spark, f"{cfg['paths']['metadata']}/scaling_stats.json", json.dumps(scaler, indent=2))
     scaled = apply_scaler(joined, scaler, NULLABLE).cache()
     check_scaled(scaled, lo, hi)
+    joined.unpersist()
+
+    # Stage 5: split and write gold.
+    gold, meta = cfg["paths"]["gold"], cfg["paths"]["metadata"]
+    labelled = scaled.withColumn("label", F.col(cfg["label"]).cast("int")).select(*gold_columns())
+    counts = {}
+    for name, part in split_rows(labelled, cfg["split"]).items():
+        shuffled(part, cfg["gold"]["files"][name], cfg["seed"]).write.mode("overwrite").parquet(f"{gold}/{name}")
+        counts[name] = spark.read.parquet(f"{gold}/{name}").count()
+        stats.record(f"{name}_rows", counts[name])
+    unused = n_events - sum(counts.values())
+    stats.record("random_rows_on_train_val_dates_unused", unused)
+
+    sizes = json.loads(spark.read.text(f"{meta}/vocab_sizes.json", wholetext=True).first()[0])
+    spec = {
+        "label": cfg["label"],
+        "id_columns": ID_COLS,
+        "categorical": [{"name": c, "vocab_size": FIXED_VOCAB.get(c) or sizes[vocab_name(c)]}
+                        for c in CATEGORICAL],
+        "numeric": NUMERIC,
+        "flags": FLAGS,
+        "sequence": {"name": SEQUENCE, "vocab_size": sizes["video_id"],
+                     "length": cfg["features"]["history_length"], "pad": 0},
+        "splits": {name: {"dates": cfg["split"]["test" if name == "test_random" else name],
+                          "rows": counts[name]} for name in SPLITS},
+    }
+    write_text(spark, f"{meta}/feature_spec.json", json.dumps(spec, indent=2))
+    check_gold(spark, cfg, spec, scaled, stats)
 
     stats.save(spark)
     spark.stop()
