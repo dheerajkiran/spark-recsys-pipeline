@@ -45,3 +45,39 @@ def test_unknown_strategy_fails(spark):
     events, _, _, items, _ = tables(spark)
     with pytest.raises(ValueError):
         join_item_daily(events, items, "magic", 4)
+
+
+from pipeline.build_dataset import apply_scaler, fit_scaler  # noqa: E402
+
+
+def test_scaler_fits_on_train_only_and_standardizes(spark):
+    train = spark.createDataFrame([(1.0,), (3.0,)], "x double")
+    val = spark.createDataFrame([(1000.0,)], "x double")   # must not move the statistics
+    stats = fit_scaler(train, ["x"], [])
+    assert stats["x"] == {"log1p": False, "mean": 2.0, "std": pytest.approx(2 ** 0.5)}
+    out = [r.x for r in apply_scaler(train.union(val), stats, []).collect()]
+    assert out[:2] == pytest.approx([-(2 ** -0.5), 2 ** -0.5], rel=1e-6)
+    assert out[2] == pytest.approx((1000 - 2) / 2 ** 0.5, rel=1e-6)
+
+
+def test_log1p_then_standardize(spark):
+    import math
+    df = spark.createDataFrame([(0.0,), (math.e - 1,)], "n double")
+    stats = fit_scaler(df, ["n"], ["n"])
+    assert stats["n"]["log1p"] and stats["n"]["mean"] == pytest.approx(0.5)
+
+
+def test_nulls_become_zero_with_a_missing_flag(spark):
+    df = spark.createDataFrame([(1.0,), (3.0,), (None,)], "r double")
+    stats = fit_scaler(df, ["r"], [])
+    assert stats["r"]["mean"] == 2.0                        # nulls ignored when fitting
+    out = apply_scaler(df, stats, ["r"]).orderBy("r_missing", "r").collect()
+    assert [(r.r_missing, round(r.r, 4)) for r in out] == [(0, -0.7071), (0, 0.7071), (1, 0.0)]
+
+
+def test_constant_column_and_negative_counts_stay_finite(spark):
+    df = spark.createDataFrame([(5, -1), (5, 3)], "c int, n int")
+    stats = fit_scaler(df, ["c", "n"], ["n"])
+    assert stats["c"]["std"] == 1.0                         # no division by zero
+    vals = [v for r in apply_scaler(df, stats, []).collect() for v in (r.c, r.n)]
+    assert all(v == v and abs(v) != float("inf") for v in vals)  # no NaN, no inf
