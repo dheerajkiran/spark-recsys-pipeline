@@ -148,3 +148,67 @@ SILVER_VIDEOS = _schema(
 
 UNKNOWN = "UNKNOWN"
 MISSING_INT = -1
+
+# --- Features (stage 3) --------------------------------------------------------
+
+FEATURE_EVENTS = _schema(
+    ("user_id", IntegerType()),
+    ("video_id", IntegerType()),
+    ("author_id", IntegerType()),
+    ("time_ms", LongType()),
+    ("is_rand", IntegerType()),
+    ("is_click", IntegerType()),
+    ("long_view", IntegerType()),
+    # user history: strictly earlier events only
+    ("user_hist_cnt", LongType()),
+    ("user_hist_ctr", DoubleType()),               # null when no history
+    ("user_hist_like_rate", DoubleType()),
+    ("user_hist_avg_watch_ratio", DoubleType()),
+    ("user_active_days", IntegerType()),
+    ("hist_video_idx", ArrayType(IntegerType())),  # last N video_idx, left-padded with 0
+    ("hist_len", IntegerType()),
+    # context
+    ("secs_since_last_event", DoubleType()),       # null on a user's first event
+    ("session_position", IntegerType()),
+    ("hour_of_day", IntegerType()),
+    ("day_of_week", IntegerType()),
+    ("tab_idx", IntegerType()),
+    # cross
+    ("user_author_prev_impr", LongType()),
+    ("user_author_prev_clicks", LongType()),
+    ("video_age_days", IntegerType()),
+    ("event_date", IntegerType()),
+)
+
+
+def _daily(key: str, prefix: str) -> StructType:
+    return _schema(
+        (key, IntegerType()),
+        ("event_date", IntegerType()),
+        (f"{prefix}_impr_prev", LongType()),
+        (f"{prefix}_ctr_prev", DoubleType()),            # null only on the first day of data
+        (f"{prefix}_avg_watch_ratio_prev", DoubleType()),
+    )
+
+
+FEATURE_ITEM_DAILY = _daily("video_id", "video")
+FEATURE_AUTHOR_DAILY = _daily("author_id", "author")
+
+USER_STATIC = _schema(
+    ("user_id", IntegerType()),
+    ("user_idx", IntegerType()),
+    *[(c, IntegerType()) for c in ["follow_user_num", "fans_user_num", "friend_user_num", "register_days"]],
+    *[(f"{c}_idx", IntegerType()) for c in [
+        "user_active_degree", "is_lowactive_period", "is_live_streamer", "is_video_author",
+        "follow_user_num_range", "fans_user_num_range", "friend_user_num_range",
+        "register_days_range", *ONEHOT_COLS]],
+)
+
+VIDEO_STATIC = _schema(
+    ("video_id", IntegerType()),
+    ("video_idx", IntegerType()),
+    ("author_idx", IntegerType()),
+    ("music_idx", IntegerType()),
+    *[(f"{c}_idx", IntegerType()) for c in ["video_type", "upload_type", "music_type", "primary_tag"]],
+    ("video_duration_s", DoubleType()),               # null when unknown
+)
