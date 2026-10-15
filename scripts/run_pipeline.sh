@@ -10,7 +10,7 @@
 set -euo pipefail
 
 if [[ $# -eq 0 ]]; then
-  set -- ingest clean
+  set -- ingest clean features
 fi
 
 # HDFS is read-only (safe mode) for ~30 s after the cluster starts.

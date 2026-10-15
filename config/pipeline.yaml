@@ -45,8 +45,15 @@ write:
 
 features:
   history_length: 20             # last-N video ids per user
+  # The history window looks back history_length + tie_slack rows and then drops
+  # events at the current timestamp (same feed request). Same-timestamp groups
+  # are at most 6 events in Pure.
+  history_tie_slack: 10
   session_gap_minutes: 30
-  min_count: 5                   # ids seen fewer times in train map to <UNK>
+  min_count: 5                   # values seen fewer times in their source map to UNK
+  # Click rates of videos/authors are smoothed toward the global click rate of
+  # previous days, as if each had this many extra impressions at that rate.
+  ctr_prior_strength: 20
   # Item statistics are computed from the logs per (video_id, date) and use
   # previous days only. video_features_statistic_*.csv is NOT used: its values
   # are monthly averages that include the val/test period (leakage).

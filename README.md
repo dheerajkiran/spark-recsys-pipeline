@@ -234,9 +234,11 @@ hdfs:///
 ├── bronze/users/  bronze/videos/  bronze/video_stats/
 ├── silver/interactions/event_date=YYYYMMDD/
 ├── silver/users/  silver/videos/
-├── features/user/  features/item/  features/context/
+├── features/events/event_date=YYYYMMDD/       # one row per event: labels, history, context, cross
+├── features/item_daily/  features/author_daily/   # previous-day stats per (key, date)
+├── features/user_static/  features/video_static/  # encoded dimension tables
 ├── gold/train/  gold/val/  gold/test/
-└── gold/_metadata/                # vocab maps, split boundaries, run_stats/<stage>.json
+└── gold/_metadata/                # vocab/<name>/, vocab_sizes.json, run_stats/<stage>.json
 ```
 
 ---
@@ -302,9 +304,11 @@ video_idx       : int        # encoded video ID
 author_idx      : int
 <categorical>_idx : int      # all other encoded categorical features
 <numeric>       : float      # scaled numeric features
-hist_video_idx  : array<int> # last N watched videos (padded)
+hist_video_idx  : array<int> # last N viewed videos, left-padded with 0
 date            : int        # kept for partitioning, dropped at training time
 ```
+
+Every vocabulary uses the same index layout: `0` = padding, `1` = unknown (rare, unseen, or null), `2..` = known values, most frequent first.
 
 ---
 
@@ -348,7 +352,14 @@ Every rule logs how many rows it removed or changed (`gold/_metadata/run_stats/c
 
 **Input:** `silver` · **Output:** `features/`
 
-Three feature groups are built separately and joined in stage 4. The full list is in the [feature catalog](#9-feature-catalog).
+Feature tables are built separately and joined in stage 4. The full list is in the [feature catalog](#9-feature-catalog).
+
+| Output | Grain | Content |
+|---|---|---|
+| `features/events` | one row per event | Labels, user history, context and user × author features. Partitioned by `event_date` |
+| `features/item_daily`, `features/author_daily` | (video or author, date) | Impressions, smoothed click rate and watch ratio over **previous days** |
+| `features/user_static`, `features/video_static` | one row per user / video | IDs and categorical columns encoded to indices, plus raw numerics |
+| `gold/_metadata/vocab/<name>/`, `vocab_sizes.json` | — | The encodings and embedding-table sizes |
 
 Key techniques:
 - **Window functions** for per-user history, with frames that end *strictly before* the current event's timestamp:
@@ -359,18 +370,38 @@ Key techniques:
   df = df.withColumn("user_hist_ctr", F.avg("is_click").over(w))
   ```
   A row-based frame (`rowsBetween(..., -1)`) would leak: 6% of events share a timestamp with other videos from the same feed request, and a row frame lets one of them see its siblings' clicks. A range frame on `time_ms` excludes everything at the same moment.
-- **Repartition by `user_id`** once before all user window functions, so they share one shuffle.
-- **Point-in-time item statistics**: item popularity features use only days before the event date, never the same or later days.
-- **Categorical encoding**: IDs are mapped to contiguous integers (`0..V-1`) for embedding tables. IDs seen fewer than `min_count` times in the training period map to a shared `<UNK>` index. Vocabularies are built **from the training period only** and saved to `gold/_metadata/`.
-- **Numeric scaling**: `log1p` for heavy-tailed counts, then standardization using training-period statistics.
+- **One shuffle for every user window.** The events are repartitioned by `user_id` once. The history, session (`user_id`, session) and user × author (`user_id`, `author_id`) windows all reuse that partitioning, because data clustered by `user_id` is also clustered by any key that includes it. The stage records the number of `user_id` shuffles in its physical plan (`run_stats/features.json`): **1**.
+- **History list without an unbounded window.** `collect_list` over an unbounded frame would build a list as long as the user's whole history for every event. Instead the window looks back N + 10 rows, drops events at the current timestamp, and keeps the last N. Same-timestamp groups are at most 6 events in Pure, so 10 rows of slack is enough. The history is the last N *viewed* (shown) videos, not only clicked ones.
+- **Sessions:** a new session starts after a 30-minute gap. Events at the same timestamp share a session and a position.
+- **Point-in-time item and author statistics:** cumulative stats over days before the event date, never the same or later days. Click rates are smoothed toward the global click rate of *previous days*: `(clicks + 20 × prior) / (impressions + 20)`. A brand-new video gets exactly the prior instead of a noisy 0/0 or 1/1.
+- **Categorical encoding:**
+  - **ID features** (user, video, author, music) and `tab`: vocabularies are built from **training-period events only**. Values seen fewer than `min_count` (5) times there map to the shared unknown index. In Pure, 11,458 val/test events come from users never seen in training, and they get the unknown index, as a cold-start user would in production.
+  - **Static categorical columns** (user activity level, follower buckets, the 18 anonymized `onehot_feat` columns, video type, primary tag): vocabularies are built from the dimension table itself. Rare values (`min_count`) map to unknown.
+  - All vocabularies are written to HDFS and read back before use. An early version built each one from the table as encoded so far, which nested every previous join into the next query plan. The plan doubled with each of the 22 user columns, and the driver ran out of memory.
+- **Numeric scaling moves to stage 4.** `log1p` and standardization need statistics from the *joined training rows*, and those only exist after the stage 4 join. Stage 3 therefore stores raw numerics.
+
+**Sanity check: single-feature AUC on the standard log.** If any single feature predicts the click almost perfectly, that is a strong sign of leakage. None does:
+
+| Feature | AUC alone | Null % |
+|---|---|---|
+| `user_hist_ctr` | 0.696 | 2.0 (first events) |
+| `user_hist_avg_watch_ratio` | 0.679 | 2.0 |
+| `video_ctr_prev` | 0.652 | 3.8 (first day of data) |
+| `author_ctr_prev` | 0.651 | 3.8 |
+| `video_avg_watch_ratio_prev` | 0.595 | 19.0 (each video's first day; unknown durations) |
+| Others | 0.44–0.55 | 0 |
+
+The nulls are real "no information yet" cases. Stage 4 fills them and adds missing-value indicators.
 
 ### Stage 4. Aggregate and join: `pipeline/build_dataset.py`
 
-**Input:** `silver` + `features/` · **Output:** a joined DataFrame (in memory)
+**Input:** `features/` · **Output:** a joined DataFrame (in memory)
 
-- Join interactions with user features on `user_id`.
-- **Broadcast join** with video metadata: this table is small enough to copy to every executor, so the large interaction table is not shuffled.
-- Join with daily video statistics, computed in stage 3 from the logs, on (`video_id`, `date`). This is large-to-large, and viral videos create hot keys, so it uses **salting** (see [engineering decisions](#12-engineering-decisions)).
+- Start from `features/events` (one row per interaction, labels included).
+- Join `user_static` on `user_id`.
+- **Broadcast join** with `video_static`: this table is small enough to copy to every executor, so the large event table is not shuffled.
+- Join `item_daily` on (`video_id`, `event_date`) and `author_daily` on (`author_id`, `event_date`). These are large-to-large, and viral videos create hot keys, so the video join uses **salting** (see [engineering decisions](#12-engineering-decisions)).
+- **Fill nulls and scale numerics** (moved here from stage 3). Rates with no history yet are filled with a neutral value and get a missing-value indicator. Heavy-tailed counts get `log1p`. Every numeric is standardized with mean and standard deviation from **training rows only**, and those statistics are saved to `gold/_metadata/`.
 - Result: one row per interaction with all features and the label.
 
 ### Stage 5. Split and write gold: `pipeline/build_dataset.py`
@@ -395,26 +426,22 @@ See [model training](#11-model-training).
 
 | Group | Feature | Definition | Technique |
 |---|---|---|---|
-| **User** | `user_hist_ctr` | Click rate over the user's prior events | Window, unbounded preceding to -1 |
-| | `user_hist_cnt` | Number of prior events | Window count |
-| | `user_avg_watch_ratio` | Mean of `play_time / duration` over prior events | Window avg |
-| | `user_like_rate` | Like rate over prior events | Window avg |
-| | `user_last_n_videos` | Last N (e.g. 20) video indices, padded | `collect_list` over a bounded window |
-| | `user_active_days` | Distinct active days before the event | Window over daily aggregates |
-| | user static features | Activity level, registration age, follower buckets | Join with user table |
-| **Item** | `video_ctr_prev_days` | Video click rate over previous days | Daily aggregate + lag |
-| | `video_impr_prev_days` | Video impressions over previous days | Daily aggregate + lag |
-| | `video_avg_watch_ratio` | Mean watch ratio over previous days | Daily aggregate + lag |
-| | `video_age_days` | Event date minus upload date | Date arithmetic |
-| | `author_ctr_prev_days` | Author-level click rate over previous days | Aggregate by author + lag |
-| | video static features | Duration bucket, type, music ID, tag | Broadcast join |
-| **Context** | `hour_of_day`, `day_of_week` | From event timestamp | Column expressions |
-| | `secs_since_last_event` | Gap since the user's previous event | `lag` over user window |
-| | `session_position` | Position in the current session (new session after 30 min gap) | Window + running sum |
-| | `tab` | App tab | Raw column |
-| **Cross** | `user_author_prev_clicks` | How often this user clicked this author before | Window partitioned by user and author |
-
----
+| **User** | `user_hist_cnt` | Number of the user's earlier events | Window count, range frame ending before this timestamp |
+| | `user_hist_ctr`, `user_hist_like_rate` | Click and like rate over earlier events (null if none) | Window sums / count |
+| | `user_hist_avg_watch_ratio` | Mean of `play_time / duration` over earlier events with a known duration | Window avg |
+| | `hist_video_idx`, `hist_len` | Last 20 viewed videos (encoded, left-padded) and how many are real | `collect_list` over a bounded row frame, same-timestamp events filtered out |
+| | `user_active_days` | Distinct active days before today | `dense_rank` of date − 1 |
+| | user static features | Activity level, follower / fan / friend counts and buckets, registration age, 18 anonymized categoricals | `features/user_static`, joined in stage 4 |
+| **Item** | `video_impr_prev`, `video_ctr_prev` | Video impressions and smoothed click rate over previous days | Daily aggregate + cumulative window ending at yesterday |
+| | `video_avg_watch_ratio_prev` | Mean watch ratio over previous days | Same |
+| | `author_ctr_prev` (+ impressions, watch ratio) | The same for the video's author | Same, by `author_id` |
+| | `video_age_days` | Event date − upload date | Date arithmetic |
+| | video static features | Video, author and music IDs, video type, upload type, music type, primary tag, duration | `features/video_static`, joined in stage 4 |
+| **Context** | `hour_of_day`, `day_of_week` | From the event time / date (Beijing time) | Column expressions |
+| | `secs_since_last_event` | Gap since the user's previous *timestamp* (siblings ignored) | Window max over the range frame |
+| | `session_position` | Position in the current session (new session after a 30 min gap) | Running sum of session starts, then a window per session |
+| | `tab_idx` | App tab | Encoded raw column |
+| **Cross** | `user_author_prev_impr`, `user_author_prev_clicks` | How often this user saw / clicked this author before | Window partitioned by user and author |
 
 ## 10. Data-quality checks
 
@@ -427,8 +454,12 @@ See [model training](#11-model-training).
 | Primary-key uniqueness | clean | No duplicate (`user_id`, `video_id`, `time_ms`); dimension keys unique | Fail |
 | No nulls in keys | clean | IDs, `time_ms`, `event_ts`, `event_date`, `play_time_ms` | Fail |
 | Value ranges | clean | Watch ratio in [0, 5]; `is_click`, `long_view`, `is_rand` in {0, 1} | Fail |
-| Null rate | features, gold | Each feature ≤ 1% nulls after fill | Fail |
-| Value ranges | features | Rates within [0, 1]; counts ≥ 0 | Fail |
+| Join fan-out | features | Event features have exactly one row per silver event (the video join adds none) | Fail |
+| Leakage: same-timestamp events | features | Events of one user at one timestamp have identical history features | Fail |
+| Leakage: first events | features | Every user's first event has no history; every video's / author's first day has no previous-day stats | Fail |
+| Value ranges | features | Rates within [0, 1]; history length within [0, N] and every list exactly N long; ages, gaps, positions positive | Fail |
+| Static tables | features | One row per silver user / video; no null indices | Fail |
+| Null rate | gold | Each feature ≤ 1% nulls after fill | Fail |
 | Label balance | gold | Positive rate within expected band for each split | Warn |
 | Split integrity | gold | max(train date) < min(val date) < min(test date) | Fail |
 | Join fan-out | aggregate | Row count after joins equals row count before | Fail |
@@ -495,13 +526,14 @@ Small tables (video metadata, vocab maps) are broadcast to every executor with `
 DataFrames reused by several feature builders (the cleaned interaction table) are `persist()`-ed and `unpersist()`-ed when no longer needed, to avoid recomputing them from HDFS.
 
 ### Leakage prevention
-- Window frames end strictly before the current event's timestamp (`rangeBetween`), so events from the same feed request never see each other.
+- Window frames end strictly before the current event's timestamp (`rangeBetween`), so events from the same feed request never see each other. A unit test checks this, and it fails if the frame is switched to `rowsBetween` (verified by making that change).
 - Item statistics use previous days only.
 - Vocabularies and scaling statistics come from the training period only.
 - Train/val/test split is by time.
 
 ### Reproducibility
 - All paths, thresholds and seeds live in `config/pipeline.yaml`.
+- **Same input, same bytes out.** Rebuilding silver and features from scratch gives identical values in every column (checked with per-column checksums across 3 rebuilds). This needed one fix: after a shuffle, Spark does not fix the order of rows that tie in a window's sort key (same-timestamp events), and floating-point addition depends on order. Averages of watch ratios therefore differed in the last bits between rebuilds. They are now summed as exact decimals and converted to doubles only at the end. Integer sums and counts were already exact. Vocabulary ties are broken by value, and history lists are ordered by (`time_ms`, `video_id`), so both are deterministic too.
 - Every run writes its stats (row counts, timings, config hash) to `gold/_metadata/`.
 
 ---
@@ -577,6 +609,7 @@ spark-recsys-pipeline/
 │   └── run_tests.sh          # pytest inside the spark-master container
 ├── pipeline/
 │   ├── common.py             # config, Spark session, run stats
+│   ├── encoding.py           # vocabularies: build and apply (0 = PAD, 1 = UNK)
 │   ├── schemas.py            # explicit Spark schemas
 │   ├── ingest.py             # raw → bronze
 │   ├── clean.py              # bronze → silver
@@ -602,7 +635,7 @@ spark-recsys-pipeline/
 
 **Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, Python 3.10 for training, and about 20 GB of free disk. Tests run inside the cluster, so they need no local Python setup.
 
-Steps 1–4 (ingest and clean only) and 6 work today. Step 5 and the remaining stages are _(planned)_.
+Steps 1–4 (ingest, clean and features) and 6 work today. Step 5 and the remaining stages are _(planned)_.
 
 ```bash
 # 1. Start the cluster (first run builds the images, ~3 min)

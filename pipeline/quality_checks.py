@@ -73,3 +73,13 @@ def check_range(df: DataFrame, col: str, low, high, name: str) -> None:
     if out:
         _fail(f"{name} {col} in [{low}, {high}]", f"{out:,} rows outside")
     _pass(f"{name} {col} in [{low}, {high}]", "all values in range")
+
+
+def check_constant_within(df: DataFrame, keys: list, cols: list, name: str) -> None:
+    """Every column must have a single value within each group of `keys`."""
+    agg = df.groupBy(*keys).agg(*[F.countDistinct(F.col(c).cast("string")).alias(c) for c in cols])
+    bad = agg.select([F.sum((F.col(c) > 1).cast("int")).alias(c) for c in cols]).first().asDict()
+    bad = {c: v for c, v in bad.items() if v}
+    if bad:
+        _fail(f"{name} constant within {keys}", f"groups with differing values: {bad}")
+    _pass(f"{name} constant within {keys}", f"{len(cols)} columns")
