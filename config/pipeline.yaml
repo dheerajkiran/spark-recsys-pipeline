@@ -43,6 +43,11 @@ clean:
 write:
   max_records_per_file: 2000000  # caps Parquet file size within a date partition
 
+gold:
+  # Files per split. Training shards files across DataLoader workers, so train
+  # gets several; rows inside are in a deterministic pseudo-random order.
+  files: {train: 8, val: 2, test: 2, test_random: 2}
+
 features:
   history_length: 20             # last-N video ids per user
   # The history window looks back history_length + tie_slack rows and then drops
@@ -59,11 +64,17 @@ features:
   # are monthly averages that include the val/test period (leakage).
 
 join:
-  salt_buckets: 8                # S for manual salting of the (video_id, date) join
+  # How to join item_daily on (video_id, event_date): broadcast | salted | sortmerge.
+  # In Pure, item_daily is 3 MB and a 24-way shuffle by that key is balanced
+  # (busiest partition 1.08x the median), so broadcast is best. Salting is for
+  # when both sides are too large to broadcast (e.g. KuaiRand-27K).
+  item_daily_strategy: broadcast
+  salt_buckets: 8                # S for the salted strategy
 
 quality:
   max_null_rate: 0.01
   label_rate_band: [0.20, 0.70]  # is_click is ~46% in Pure; warn if positive rate per split falls outside
+  label_rate_band_random: [0.10, 0.30]  # random-log exposures: ~18% click rate in Pure
 
 spark:
   shuffle_partitions: 24
