@@ -657,9 +657,9 @@ spark-recsys-pipeline/
 
 ## 17. Running locally
 
-**Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, Python 3.10 for training, and about 20 GB of free disk. Tests run inside the cluster, so they need no local Python setup.
+**Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, [uv](https://docs.astral.sh/uv/) for the training environment, and about 20 GB of free disk. The pipeline and its tests run inside the cluster, so they need no local Python setup.
 
-Steps 1–4 (the whole data pipeline, raw CSV to gold) and 6 work today. Step 5 (training) is _(planned)_.
+Steps 1–4 (the whole data pipeline, raw CSV to gold) and 6 work today. In step 5, the environment setup and gold export work; the training command is _(planned)_.
 
 ```bash
 # 1. Start the cluster (first run builds the images, ~3 min)
@@ -676,8 +676,15 @@ docker exec spark-master spark-submit /opt/project/scripts/smoke_test.py
 #    or chosen stages: ./scripts/run_pipeline.sh build_dataset
 ./scripts/run_pipeline.sh
 
-# 5. Train
-python training/train_deepfm.py --config config/pipeline.yaml
+# 5. Train (on the host)
+#    One-time setup: a Python 3.10 virtual environment with pinned packages.
+#    uv downloads Python 3.10 for this project only; system Pythons are untouched.
+uv venv --python 3.10 .venv
+uv pip install --python .venv -r requirements-train.txt
+#    Copy gold from HDFS to data/gold/ (checks row counts against feature_spec.json)
+./scripts/export_gold.sh
+#    (planned) train the models
+.venv/bin/python training/train_deepfm.py --config config/pipeline.yaml
 
 # 6. Run tests (inside the spark-master container)
 ./scripts/run_tests.sh
