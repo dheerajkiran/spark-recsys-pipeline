@@ -14,6 +14,10 @@ DEST="$REPO_ROOT/data/gold"
 TMP="$REPO_ROOT/data/gold.tmp"
 PY="$REPO_ROOT/.venv/bin/python"
 
+if ! docker exec namenode true 2>/dev/null; then
+  echo "The namenode container is not running. Start the cluster with: docker compose up -d" >&2
+  exit 1
+fi
 docker exec namenode hdfs dfsadmin -safemode wait >/dev/null
 if ! docker exec namenode hdfs dfs -test -e /gold/_metadata/feature_spec.json; then
   echo "No gold dataset on HDFS. Run ./scripts/run_pipeline.sh first." >&2
