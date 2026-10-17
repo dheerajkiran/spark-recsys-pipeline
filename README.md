@@ -489,8 +489,9 @@ The join fan-out check catches a common and silent bug: a dimension table with d
 
 ### Data loading
 
-- `training/dataset.py` implements a PyTorch `IterableDataset` that reads gold Parquet files with PyArrow in row-group batches.
-- Files are sharded across `DataLoader` workers so each worker reads different files.
+- `training/dataset.py` implements a PyTorch `IterableDataset` that reads gold Parquet files with PyArrow and yields whole batches (categorical indices, scaled numerics plus missing flags, the history sequence, the label). Column roles come from `gold/_metadata/feature_spec.json`, so no feature names are hard-coded.
+- Files are sharded across `DataLoader` workers so each worker reads different files; tests check that every row is read exactly once with 0, 2, or more workers than files. With `shuffle=True`, file order and rows within each file are reshuffled every epoch, deterministically from (seed, epoch).
+- Reading is fast enough that workers are not needed: about 2.4M rows/s in-process, so one training epoch (1.26M rows) is read in 0.5 s. On macOS each worker is a new process that re-imports PyTorch (3–5 s), so training defaults to `num_workers=0`.
 - The gold data is copied from HDFS to local disk before training (`hdfs dfs -get`), which keeps the training code simple. Reading directly from HDFS through PyArrow is a stretch goal.
 
 ### Models
@@ -686,8 +687,10 @@ uv pip install --python .venv -r requirements-train.txt
 #    (planned) train the models
 .venv/bin/python training/train_deepfm.py --config config/pipeline.yaml
 
-# 6. Run tests (inside the spark-master container)
+# 6. Run tests: pipeline tests inside the spark-master container,
+#    training tests in the host venv
 ./scripts/run_tests.sh
+.venv/bin/python -m pytest training/tests
 ```
 
 Web UIs:
