@@ -1,0 +1,9 @@
+# Training environment (runs on the host, not in the Spark cluster).
+# Python 3.10, the same version the cluster uses. Set up with:
+#   uv venv --python 3.10 .venv && uv pip install --python .venv -r requirements-train.txt
+torch==2.5.1
+pyarrow==17.0.0
+numpy==1.26.4
+scikit-learn==1.5.2
+pyyaml==6.0.2
+pytest==8.3.3
