@@ -4,7 +4,7 @@ A distributed data preprocessing pipeline that turns raw short-video interaction
 
 Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features across a cluster of workers, and the result is written back as partitioned **Parquet**. A **PyTorch** CTR model then trains on that data.
 
-> **Status:** Planning. This README describes what will be built. Sections marked _(planned)_ will be filled in with real results as each phase is completed. Numbers such as memory sizes and thresholds are starting values and will be tuned once real data is loaded.
+> **Status:** The raw-to-gold Spark pipeline is complete (phases 0–4). The PyTorch loader, logistic regression, and DeepFM models are implemented (checkpoints 5.1–5.3). The training loop, full model results, and benchmarks are planned.
 
 ---
 
@@ -26,7 +26,7 @@ Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features acro
 14. [When: roadmap](#14-when-roadmap)
 15. [Risks and mitigations](#15-risks-and-mitigations)
 16. [Repository layout](#16-repository-layout)
-17. [Running locally](#17-running-locally-planned)
+17. [Running locally](#17-running-locally)
 18. [Results](#18-results-planned)
 
 ---
@@ -503,6 +503,23 @@ The join fan-out check catches a common and silent bug: a dimension table with d
 
 User history (`user_last_n_videos`) is included by mean-pooling the history video embeddings. Attention pooling (as in DIN) is a stretch goal.
 
+`training/models.py` implements `LogisticRegression(spec)` and
+`DeepFM(spec, embedding_dim=16, hidden_dims=(128, 64), dropout=0.0)`. Both accept
+the loader's batch dictionary and return one **logit** per row (`[B]`); use
+`BCEWithLogitsLoss` for training and `torch.sigmoid(logits)` for probabilities.
+Dimensions and vocabulary sizes come from the feature spec. LR sums scalar
+categorical weights, a numeric linear term (including missing flags), and a
+mean-pooled history weight. DeepFM adds pairwise FM interactions and an MLP
+using the same field embeddings in both paths. Each numeric value scales a
+learned field vector. History has a separate embedding table from the target
+video; PAD is excluded from its sum and count, with empty histories mapped to
+zero. Ordinary categorical index zero remains learnable (for example, hour 0).
+
+Model tests check the LR score, FM formula, and complete DeepFM score against
+independent calculations, padding invariance, gradient flow, and fitting a small
+batch to loss below 0.02.
+The training loop and full validation/test results are still planned.
+
 ### Training setup
 
 - Loss: binary cross-entropy.
@@ -557,8 +574,8 @@ DataFrames reused by several feature builders (the cleaned interaction table) ar
 
 ### Reproducibility
 - All paths, thresholds and seeds live in `config/pipeline.yaml`.
-- **Same input, same bytes out.** Rebuilding silver and features from scratch gives identical values in every column (checked with per-column checksums across 3 rebuilds). This needed one fix: after a shuffle, Spark does not fix the order of rows that tie in a window's sort key (same-timestamp events), and floating-point addition depends on order. Averages of watch ratios therefore differed in the last bits between rebuilds. They are now summed as exact decimals and converted to doubles only at the end. Integer sums and counts were already exact. Vocabulary ties are broken by value, and history lists are ordered by (`time_ms`, `video_id`), so both are deterministic too.
-- The gold dataset is also identical across runs (checksums of every split). Scaling statistics are rounded to 9 decimals, and the training shuffle is a seeded hash, not `rand()`.
+- **Same input, same feature values.** Rebuilding silver and features from scratch gives identical values in every column (checked with per-column checksums across 3 rebuilds). This needed one fix: after a shuffle, Spark does not fix the order of rows that tie in a window's sort key (same-timestamp events), and floating-point addition depends on order. Averages of watch ratios therefore differed in the last bits between rebuilds. They are now summed as exact decimals and converted to doubles only at the end. Integer sums and counts were already exact. Vocabulary ties are broken by value, and history lists are ordered by (`time_ms`, `video_id`), so both are deterministic too.
+- Gold values and row order are identical across runs. Two full rebuilds were compared across all 1,940,143 gold rows and 74 columns, including vocabularies and deterministic JSON metadata. Scaling statistics are rounded to 9 decimals, and the training shuffle is a seeded hash, not `rand()`. Whole-file checksums can differ: the 14 Parquet shards had identical data bodies, but encoding lists in their footers appeared in different orders. Compare decoded values and row order for reproducibility; physical file bytes are not guaranteed to match. Run-stat timings also vary.
 - Every stage writes its stats (row counts, timings, and a 12-character hash of the full config) to `gold/_metadata/run_stats/<stage>.json`, so any output can be traced to the settings that produced it.
 
 ---
