@@ -82,3 +82,20 @@ spark:
   skew_join_enabled: true
 
 seed: 42
+
+# CPU training on locally exported gold. These settings do not require Docker.
+# Paths here are relative to the repository; --run-dir selects one output run.
+training:
+  gold_dir: data/gold
+  output_dir: checkpoints
+  model: deepfm
+  epochs: 20
+  batch_size: 4096
+  learning_rate: 0.001
+  patience: 3
+  embedding_dim: 16
+  hidden_dims: [128, 64]
+  dropout: 0.0
+  num_workers: 0
+  threads: 2
+  evaluate_test: false           # enable explicitly only for a final model run
