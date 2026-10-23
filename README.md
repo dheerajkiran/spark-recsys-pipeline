@@ -4,7 +4,7 @@ A distributed data preprocessing pipeline that turns raw short-video interaction
 
 Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features across a cluster of workers, and the result is written back as partitioned **Parquet**. A **PyTorch** CTR model then trains on that data.
 
-> **Status:** The raw-to-gold Spark pipeline is complete (phases 0–4). The PyTorch loader, logistic regression, and DeepFM models are implemented (checkpoints 5.1–5.3). The training loop, full model results, and benchmarks are planned.
+> **Status:** The raw-to-gold Spark pipeline is complete (phases 0–4). The PyTorch loader, models, and training/evaluation loop are implemented (checkpoints 5.1–5.4). Full model results and benchmarks are planned.
 
 ---
 
@@ -422,7 +422,7 @@ The nulls are real "no information yet" cases. Stage 4 fills them and adds missi
 
 - **Time-based split.** A random split would put future events in training and past events in test, which inflates offline metrics and does not reflect how the model is used in production.
 - **`test_random`** holds videos the app showed at random, not ones the recommender picked. Evaluating on it shows how well the model ranks *any* video, not just the ones the old recommender already favoured. Random-log rows on train and val dates (659,042) are not used, so training stays on the recommender's own distribution.
-- **Shuffled, fixed-size files.** Rows are ordered by a seeded hash of the event key, so training batches are not time-ordered and every run writes the same bytes. Each split gets a fixed number of files (`gold.files`), so training readers are not slowed by many tiny files and DataLoader workers get even shares. (A first version reduced the hash to 8 values before repartitioning. Spark hashed those 8 values again, collisions left half the files empty, and train got 4 files instead of 8. A file-count check and a unit test now guard against this.)
+- **Shuffled, fixed-size files.** Rows are ordered by a seeded hash of the event key, so training batches are not time-ordered and row order is reproducible. Each split gets a fixed number of files (`gold.files`), so training readers are not slowed by many tiny files and DataLoader workers get even shares. (A first version reduced the hash to 8 values before repartitioning. Spark hashed those 8 values again, collisions left half the files empty, and train got 4 files instead of 8. A file-count check and a unit test now guard against this.)
 - **`feature_spec.json`** lists every categorical column with its embedding size, the numerics, the flags, the history sequence, the label, and each split's dates and row count.
 
 ### Stage 6. Data-quality gates: `pipeline/quality_checks.py`
@@ -518,14 +518,41 @@ zero. Ordinary categorical index zero remains learnable (for example, hour 0).
 Model tests check the LR score, FM formula, and complete DeepFM score against
 independent calculations, padding invariance, gradient flow, and fitting a small
 batch to loss below 0.02.
-The training loop and full validation/test results are still planned.
+Full model results are still planned for checkpoint 5.5.
 
 ### Training setup
 
-- Loss: binary cross-entropy.
-- Optimizer: Adam; embedding size, MLP layers and learning rate tuned on the validation split.
-- Early stopping on validation AUC.
-- Final metrics reported once on the test split.
+- `training/train_deepfm.py --model {lr,deepfm}` trains on the host CPU with
+  Adam and `BCEWithLogitsLoss`. Defaults live in `config/pipeline.yaml` under
+  `training`; CLI arguments override them. Python, NumPy and PyTorch use the
+  configured seed, and CPU deterministic algorithms are enabled.
+- Every epoch reads train and evaluates validation AUC. A strict improvement
+  saves the best checkpoint; `patience` consecutive epochs without improvement
+  stop training. The saved best state is restored before final evaluation.
+- Runs evaluate validation only by default. Use `--evaluate-test` for a final
+  model run: it evaluates `test` and, when present in the spec, `test_random`
+  once each after selection. Tune using validation only; smoke runs do not need
+  access to either test directory.
+- `num_workers=0` is the default. When workers are requested, they are recreated
+  each epoch so they receive the new shuffle epoch; this incurs macOS spawn
+  overhead. Persistent workers would retain the loader's previous epoch state.
+- Full runs check train/evaluation row counts against the spec. For smoke runs,
+  `--max-train-batches` and `--max-eval-batches` limit work and mark the saved
+  metrics as `partial_run`. These subset results are not final model results.
+
+Each run writes to a new directory under `checkpoints/`, or to an empty directory
+specified by `--run-dir`. Existing nonempty directories are rejected. Artifacts:
+
+- `best.pt`: best model state, Adam state, epoch, validation metrics, effective
+  model/training settings and feature spec. Load with
+  `torch.load(path, map_location="cpu", weights_only=True)`.
+- `metrics.json`: epoch history, best epoch, effective settings, feature-spec
+  digest, full/subset status, global AUC/log loss and mean predicted probability
+  versus click rate. Metrics aggregate all rows, including partial batches.
+- `predictions/val.npz`: labels, float64 probabilities and logits from the best
+  epoch; test prediction files are added only with `--evaluate-test`. These are
+  the exact predictions used for the reported metrics, allowing independent
+  recomputation with scikit-learn.
 
 ### Metrics
 
@@ -677,7 +704,8 @@ spark-recsys-pipeline/
 
 **Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, [uv](https://docs.astral.sh/uv/) for the training environment, and about 20 GB of free disk. The pipeline and its tests run inside the cluster, so they need no local Python setup.
 
-Steps 1–4 (the whole data pipeline, raw CSV to gold) and 6 work today. In step 5, the environment setup and gold export work; the training command is _(planned)_.
+All steps below work today. Once gold is exported, training runs on the host
+without starting the containers. Full LR/DeepFM comparison results remain planned.
 
 ```bash
 # 1. Start the cluster (first run builds the images, ~3 min)
@@ -701,8 +729,14 @@ uv venv --python 3.10 .venv
 uv pip install --python .venv -r requirements-train.txt
 #    Copy gold from HDFS to data/gold/ (checks row counts against feature_spec.json)
 ./scripts/export_gold.sh
-#    (planned) train the models
-.venv/bin/python training/train_deepfm.py --config config/pipeline.yaml
+#    Train using train/val only; each command creates a new run directory
+.venv/bin/python training/train_deepfm.py --model lr --config config/pipeline.yaml
+.venv/bin/python training/train_deepfm.py --model deepfm --config config/pipeline.yaml
+#    Quick one-epoch smoke example (use a new/empty run directory)
+.venv/bin/python training/train_deepfm.py --model lr --epochs 1 \
+  --max-train-batches 4 --max-eval-batches 2 --run-dir checkpoints/lr-smoke
+#    For a selected final model run, add --evaluate-test to evaluate held-out
+#    splits once from the best checkpoint. Do not use test results for tuning.
 
 # 6. Run tests: pipeline tests inside the spark-master container,
 #    training tests in the host venv
