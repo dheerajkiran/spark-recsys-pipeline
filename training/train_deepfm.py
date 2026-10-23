@@ -131,6 +131,61 @@ def check_rows(spec, split, rows, limit):
         raise ValueError(f"{split}: read {rows} rows; spec expects {spec['splits'][split]['rows']}")
 
 
+def evaluate_saved_checkpoint(gold_dir, run_dir) -> dict:
+    """Evaluate held-out splits once from a selected full-run checkpoint.
+
+    The exclusive marker also survives a failed evaluation: do not silently
+    reuse held-out data after partial results. Inspect that failure manually.
+    """
+    gold_dir, run_dir = Path(gold_dir).resolve(), Path(run_dir).resolve()
+    result = json.loads((run_dir / "metrics.json").read_text())
+    marker = run_dir / "heldout_evaluation.json"
+    if result["test_evaluated"] or marker.exists():
+        raise ValueError("Held-out evaluation already started or completed for this run")
+    config_path = run_dir / "best.pt"
+    checkpoint = torch.load(config_path, map_location="cpu", weights_only=True)
+    config = TrainConfig(**checkpoint["model_config"])
+    if result["partial_run"] or config.max_train_batches is not None or config.max_eval_batches is not None:
+        raise ValueError("Final evaluation requires a full run without batch limits")
+    spec = load_spec(gold_dir)
+    digest = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
+    if spec != checkpoint["feature_spec"] or digest != result["feature_spec_sha256"]:
+        raise ValueError("Current feature spec differs from the selected checkpoint")
+    if (checkpoint["epoch"] != result["best_epoch"] or checkpoint["val_metrics"] != result["best_val"]
+            or config.model != result["model"]):
+        raise ValueError("Checkpoint does not match the run's selected best epoch/metrics/model")
+    datasets = {split: GoldDataset(gold_dir / split, spec, config.batch_size)
+                for split in ("test", "test_random") if split in spec["splits"]}
+    if "test" not in datasets:
+        raise ValueError("Final evaluation requires a test split in the feature spec")
+    prediction_dir = run_dir / "predictions"
+    if any(prediction_dir.glob("test*.npz")):
+        raise ValueError("Held-out prediction files already exist for this run")
+    selection = {"checkpoint_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
+                 "best_epoch": result["best_epoch"], "splits": list(datasets),
+                 "started_at": datetime.now(timezone.utc).isoformat(), "status": "started"}
+    # Exclusive create guards against simultaneous evaluators after the checks.
+    with marker.open("x") as stream:
+        json.dump(selection, stream, indent=2)
+    torch.set_num_threads(config.threads)
+    torch.use_deterministic_algorithms(True)
+    model = make_model(spec, config)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    for split, dataset in datasets.items():
+        scores, predictions = evaluate(model, make_loader(dataset, config))
+        check_rows(spec, split, scores["rows"], None)
+        result["final"][split] = scores
+        np.savez(prediction_dir / f"{split}.npz", **predictions)
+    selection.update(status="complete", completed_at=datetime.now(timezone.utc).isoformat())
+    result.update(test_evaluated=True, evaluation=selection)
+    temp = run_dir / "metrics.json.tmp"
+    temp.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
+    temp.replace(run_dir / "metrics.json")
+    marker.write_text(json.dumps(selection, indent=2) + "\n")
+    print(f"Held-out evaluation complete: {run_dir}", flush=True)
+    return result
+
+
 def run_training(gold_dir, run_dir, config: TrainConfig) -> dict:
     """Train on CPU, restore the best val checkpoint, and save run artifacts.
 
@@ -147,13 +202,6 @@ def run_training(gold_dir, run_dir, config: TrainConfig) -> dict:
     train_data = GoldDataset(gold_dir / "train", spec, config.batch_size,
                              shuffle=True, seed=config.seed)
     val_data = GoldDataset(gold_dir / "val", spec, config.batch_size)
-    held_out = {}
-    if config.evaluate_test:
-        for split in ("test", "test_random"):
-            if split in spec["splits"]:
-                held_out[split] = GoldDataset(gold_dir / split, spec, config.batch_size)
-        if "test" not in held_out:
-            raise ValueError("Final evaluation requires a test split in the feature spec")
     run_dir.mkdir(parents=True, exist_ok=True)
     if any(run_dir.iterdir()):
         raise FileExistsError(f"Run directory must be empty: {run_dir}")
@@ -202,23 +250,18 @@ def run_training(gold_dir, run_dir, config: TrainConfig) -> dict:
             stale_epochs += 1
         if stale_epochs >= config.patience:
             break
-    checkpoint = torch.load(run_dir / "best.pt", map_location="cpu", weights_only=True)
-    model.load_state_dict(checkpoint["model_state_dict"])
     final = {"val": best_val}
-    for split, dataset in held_out.items():
-        scores, predictions = evaluate(model, make_loader(dataset, config), config.max_eval_batches)
-        check_rows(spec, split, scores["rows"], config.max_eval_batches)
-        final[split] = scores
-        np.savez(prediction_dir / f"{split}.npz", **predictions)
     result = {"model": config.model, "config": asdict(config), "gold_dir": str(gold_dir),
               "feature_spec_sha256": hashlib.sha256(
                   json.dumps(spec, sort_keys=True).encode()).hexdigest(),
               "history": history, "best_epoch": best_epoch, "best_val": best_val,
               "stopped_early": len(history) < config.epochs,
               "partial_run": config.max_train_batches is not None or config.max_eval_batches is not None,
-              "test_evaluated": bool(held_out), "final": final}
+              "test_evaluated": False, "final": final}
     (run_dir / "metrics.json").write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
     print(f"Best epoch: {best_epoch}; artifacts: {run_dir}", flush=True)
+    if config.evaluate_test:
+        return evaluate_saved_checkpoint(gold_dir, run_dir)
     return result
 
 
@@ -236,8 +279,18 @@ def main(argv=None):
     parser.add_argument("--hidden-dims", type=int, nargs="+")
     parser.add_argument("--evaluate-test", action="store_true", default=None,
                         help="Evaluate held-out splits once, using the best checkpoint")
+    parser.add_argument("--evaluate-only", action="store_true",
+                        help="Evaluate an existing --run-dir checkpoint without retraining")
     args = parser.parse_args(argv)
     try:
+        if args.evaluate_only:
+            if args.run_dir is None:
+                raise ValueError("--evaluate-only requires --run-dir")
+            if any(getattr(args, key, None) is not None for key in TrainConfig.__dataclass_fields__):
+                raise ValueError("--evaluate-only uses saved settings; omit training overrides")
+            metrics = json.loads((args.run_dir / "metrics.json").read_text())
+            evaluate_saved_checkpoint(args.gold_dir or metrics["gold_dir"], args.run_dir)
+            return
         raw = yaml.safe_load(args.config.read_text())
         settings = dict(raw.get("training", {}))
         configured_gold = ROOT / settings.pop("gold_dir", "data/gold")
