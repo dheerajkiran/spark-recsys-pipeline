@@ -30,7 +30,25 @@ from torch.utils.data import IterableDataset, get_worker_info
 
 
 def load_spec(gold_dir) -> dict:
-    return json.loads((Path(gold_dir) / "_metadata" / "feature_spec.json").read_text())
+    spec = json.loads((Path(gold_dir) / "_metadata" / "feature_spec.json").read_text())
+    validate_feature_roles(spec)
+    return spec
+
+
+def validate_feature_roles(spec: dict) -> None:
+    """Reject the gold target and source target alias in model input roles."""
+    targets = {"label"}
+    if spec.get("label") is not None:
+        targets.add(spec["label"])
+    roles = {
+        "categorical": [column["name"] for column in spec["categorical"]],
+        "numeric": spec["numeric"], "flags": spec["flags"],
+        "sequence": [spec["sequence"]["name"]],
+    }
+    for role, names in roles.items():
+        for name in names:
+            if name in targets:
+                raise ValueError(f"Target column {name!r} cannot be used as a {role} feature")
 
 
 class GoldDataset(IterableDataset):

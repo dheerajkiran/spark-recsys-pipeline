@@ -1,0 +1,621 @@
+{
+  "date": "2026-10-23",
+  "dataset": "KuaiRand-Pure",
+  "selection_manifest": "phase5_selection.json",
+  "environment": {
+    "python": "3.10.21",
+    "torch": "2.5.1",
+    "device": "cpu",
+    "threads": 2
+  },
+  "models": {
+    "lr": {
+      "run_dir": "checkpoints/phase55-lr-default",
+      "config": {
+        "model": "lr",
+        "epochs": 20,
+        "batch_size": 4096,
+        "learning_rate": 0.001,
+        "patience": 3,
+        "seed": 42,
+        "embedding_dim": 16,
+        "hidden_dims": [
+          128,
+          64
+        ],
+        "dropout": 0.0,
+        "num_workers": 0,
+        "threads": 2,
+        "max_train_batches": null,
+        "max_eval_batches": null,
+        "evaluate_test": false
+      },
+      "best_epoch": 16,
+      "epochs_run": 19,
+      "checkpoint_sha256": "cd60fd3ca9caf8a9732e87e13e519e8c82ecaf7420601bb1ebe90de778b46f09",
+      "feature_spec_sha256": "660344ef2edd9b6185d43a813f6ba1ef5c380315eb9040e5d640e2c4e6e3ee5f",
+      "metrics": {
+        "val": {
+          "rows": 78444,
+          "auc": 0.7571961119726672,
+          "log_loss": 0.5799123587552835,
+          "mean_probability": 0.4539953875218635,
+          "positive_rate": 0.46207485594819236
+        },
+        "test": {
+          "rows": 72556,
+          "auc": 0.7471228354663788,
+          "log_loss": 0.5891756416916999,
+          "mean_probability": 0.4140178833045485,
+          "positive_rate": 0.4451044710292739
+        },
+        "test_random": {
+          "rows": 527007,
+          "auc": 0.6669661576136444,
+          "log_loss": 0.577571646370127,
+          "mean_probability": 0.4007049845854951,
+          "positive_rate": 0.18171864889840172
+        }
+      },
+      "history": [
+        {
+          "epoch": 1,
+          "train_loss": 0.6117219554663594,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7364831006173442,
+            "log_loss": 0.6040247897484661,
+            "mean_probability": 0.4213987128972381,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 2,
+          "train_loss": 0.5773495385586572,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7457304111395248,
+            "log_loss": 0.5916895423994167,
+            "mean_probability": 0.4466959850032092,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 3,
+          "train_loss": 0.5671338126927284,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7500757990446956,
+            "log_loss": 0.588897995918579,
+            "mean_probability": 0.4324351202855475,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 4,
+          "train_loss": 0.5609661962743735,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7521614769956906,
+            "log_loss": 0.5855534197157165,
+            "mean_probability": 0.44155197248414857,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 5,
+          "train_loss": 0.5567493517127784,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7534704461436612,
+            "log_loss": 0.5837567123885922,
+            "mean_probability": 0.446212901877039,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 6,
+          "train_loss": 0.5537175480346358,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7545416483648097,
+            "log_loss": 0.5829175075029231,
+            "mean_probability": 0.44372894744767233,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 7,
+          "train_loss": 0.5513314158316113,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7553666813205744,
+            "log_loss": 0.5828354612602914,
+            "mean_probability": 0.43780026264192684,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 8,
+          "train_loss": 0.5494126073488447,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7558680011317237,
+            "log_loss": 0.581659415832338,
+            "mean_probability": 0.4446104198537876,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 9,
+          "train_loss": 0.547825783421572,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7561979371653736,
+            "log_loss": 0.5813526372942062,
+            "mean_probability": 0.4450498591036666,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 10,
+          "train_loss": 0.5464242622312477,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7564044536561711,
+            "log_loss": 0.5814347070969781,
+            "mean_probability": 0.4416790617358694,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 11,
+          "train_loss": 0.5452087123960643,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7566660418649835,
+            "log_loss": 0.580528708555316,
+            "mean_probability": 0.45001540380018445,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 12,
+          "train_loss": 0.5441222153750193,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.756831310957707,
+            "log_loss": 0.5804644842122462,
+            "mean_probability": 0.44831143474865565,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 13,
+          "train_loss": 0.54314943530202,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7569934584719792,
+            "log_loss": 0.580599987726786,
+            "mean_probability": 0.44525724213382883,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 14,
+          "train_loss": 0.5422331443766861,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7569307630937848,
+            "log_loss": 0.5803433140985359,
+            "mean_probability": 0.44938172592653863,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 15,
+          "train_loss": 0.541439156863172,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7570927942312713,
+            "log_loss": 0.5798739420247261,
+            "mean_probability": 0.4558921837546389,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 16,
+          "train_loss": 0.5406974060971135,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7571961119726672,
+            "log_loss": 0.5799123587552835,
+            "mean_probability": 0.4539953875218635,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 17,
+          "train_loss": 0.5400274113337552,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7571547887335417,
+            "log_loss": 0.5804155649313311,
+            "mean_probability": 0.44648149851196706,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 18,
+          "train_loss": 0.5393677148100572,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7568050238608404,
+            "log_loss": 0.5802298115453897,
+            "mean_probability": 0.4544723391219087,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 19,
+          "train_loss": 0.5387889253369925,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7570259831684294,
+            "log_loss": 0.5803491899530757,
+            "mean_probability": 0.44991776418898227,
+            "positive_rate": 0.46207485594819236
+          }
+        }
+      ],
+      "evaluation": {
+        "checkpoint_sha256": "cd60fd3ca9caf8a9732e87e13e519e8c82ecaf7420601bb1ebe90de778b46f09",
+        "best_epoch": 16,
+        "splits": [
+          "test",
+          "test_random"
+        ],
+        "started_at": "2026-10-23T20:13:44.000338+00:00",
+        "status": "complete",
+        "completed_at": "2026-10-23T20:13:44.763095+00:00"
+      }
+    },
+    "deepfm": {
+      "run_dir": "checkpoints/phase55-deepfm-default",
+      "config": {
+        "model": "deepfm",
+        "epochs": 20,
+        "batch_size": 4096,
+        "learning_rate": 0.001,
+        "patience": 3,
+        "seed": 42,
+        "embedding_dim": 16,
+        "hidden_dims": [
+          128,
+          64
+        ],
+        "dropout": 0.0,
+        "num_workers": 0,
+        "threads": 2,
+        "max_train_batches": null,
+        "max_eval_batches": null,
+        "evaluate_test": false
+      },
+      "best_epoch": 1,
+      "epochs_run": 4,
+      "checkpoint_sha256": "c4c558cfa632af7defcfc0607fd656275cafb7653771f472e3a2f392fa1026cc",
+      "feature_spec_sha256": "660344ef2edd9b6185d43a813f6ba1ef5c380315eb9040e5d640e2c4e6e3ee5f",
+      "metrics": {
+        "val": {
+          "rows": 78444,
+          "auc": 0.759087001663055,
+          "log_loss": 0.5787487652895991,
+          "mean_probability": 0.4811564919239348,
+          "positive_rate": 0.46207485594819236
+        },
+        "test": {
+          "rows": 72556,
+          "auc": 0.7489557333706438,
+          "log_loss": 0.5853462047929789,
+          "mean_probability": 0.44095024674598826,
+          "positive_rate": 0.4451044710292739
+        },
+        "test_random": {
+          "rows": 527007,
+          "auc": 0.6922548845132791,
+          "log_loss": 0.5770299510800249,
+          "mean_probability": 0.4144177504883962,
+          "positive_rate": 0.18171864889840172
+        }
+      },
+      "history": [
+        {
+          "epoch": 1,
+          "train_loss": 0.5687870660842534,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.759087001663055,
+            "log_loss": 0.5787487652895991,
+            "mean_probability": 0.4811564919239348,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 2,
+          "train_loss": 0.5419818195573856,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7574227864919078,
+            "log_loss": 0.5792311037012325,
+            "mean_probability": 0.4631379934819975,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 3,
+          "train_loss": 0.5307967683315523,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7518398906695277,
+            "log_loss": 0.5866437993575038,
+            "mean_probability": 0.4639769532180455,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 4,
+          "train_loss": 0.5160666669004044,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.7434980082135977,
+            "log_loss": 0.5953061287798683,
+            "mean_probability": 0.4738152678608139,
+            "positive_rate": 0.46207485594819236
+          }
+        }
+      ],
+      "evaluation": {
+        "checkpoint_sha256": "c4c558cfa632af7defcfc0607fd656275cafb7653771f472e3a2f392fa1026cc",
+        "best_epoch": 1,
+        "splits": [
+          "test",
+          "test_random"
+        ],
+        "started_at": "2026-10-23T20:13:44.979040+00:00",
+        "status": "complete",
+        "completed_at": "2026-10-23T20:13:46.105106+00:00"
+      }
+    }
+  },
+  "shuffled_label_controls": {
+    "deepfm": {
+      "run_dir": "checkpoints/phase55-shuffled-control",
+      "config": {
+        "model": "deepfm",
+        "epochs": 20,
+        "batch_size": 4096,
+        "learning_rate": 0.001,
+        "patience": 3,
+        "seed": 42,
+        "embedding_dim": 16,
+        "hidden_dims": [
+          128,
+          64
+        ],
+        "dropout": 0.0,
+        "num_workers": 0,
+        "threads": 2,
+        "max_train_batches": null,
+        "max_eval_batches": null,
+        "evaluate_test": false
+      },
+      "best_epoch": 1,
+      "best_val": {
+        "rows": 78444,
+        "auc": 0.5265771516217943,
+        "log_loss": 0.6894768766710898,
+        "mean_probability": 0.47434959916683944,
+        "positive_rate": 0.46207485594819236
+      },
+      "history": [
+        {
+          "epoch": 1,
+          "train_loss": 0.6913374972445584,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.5265771516217943,
+            "log_loss": 0.6894768766710898,
+            "mean_probability": 0.47434959916683944,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 2,
+          "train_loss": 0.685734271187311,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.50321565567944,
+            "log_loss": 0.6946118483739281,
+            "mean_probability": 0.47339881900534053,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 3,
+          "train_loss": 0.6731079788517582,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.49276511216490404,
+            "log_loss": 0.7211088765576706,
+            "mean_probability": 0.43880873873707105,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 4,
+          "train_loss": 0.6623181344351616,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.51275225306618,
+            "log_loss": 0.7124887549200883,
+            "mean_probability": 0.4620134444921168,
+            "positive_rate": 0.46207485594819236
+          }
+        }
+      ],
+      "tolerance_passed": false,
+      "test_evaluated": false
+    },
+    "lr_diagnostic": {
+      "run_dir": "checkpoints/phase55-shuffled-lr-diagnostic",
+      "config": {
+        "model": "lr",
+        "epochs": 20,
+        "batch_size": 4096,
+        "learning_rate": 0.001,
+        "patience": 3,
+        "seed": 42,
+        "embedding_dim": 16,
+        "hidden_dims": [
+          128,
+          64
+        ],
+        "dropout": 0.0,
+        "num_workers": 0,
+        "threads": 2,
+        "max_train_batches": null,
+        "max_eval_batches": null,
+        "evaluate_test": false
+      },
+      "best_epoch": 1,
+      "best_val": {
+        "rows": 78444,
+        "auc": 0.5523289495978607,
+        "log_loss": 0.6880283353735493,
+        "mean_probability": 0.46694471234312646,
+        "positive_rate": 0.46207485594819236
+      },
+      "history": [
+        {
+          "epoch": 1,
+          "train_loss": 0.6911309849656992,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.5523289495978607,
+            "log_loss": 0.6880283353735493,
+            "mean_probability": 0.46694471234312646,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 2,
+          "train_loss": 0.6890821978031878,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.4776786657132653,
+            "log_loss": 0.6930019333854007,
+            "mean_probability": 0.47562514371587133,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 3,
+          "train_loss": 0.6876380714333105,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.47025646878746263,
+            "log_loss": 0.6941591910357809,
+            "mean_probability": 0.464518295255013,
+            "positive_rate": 0.46207485594819236
+          }
+        },
+        {
+          "epoch": 4,
+          "train_loss": 0.6864646728590137,
+          "train_rows": 1262136,
+          "val": {
+            "rows": 78444,
+            "auc": 0.5143723225342426,
+            "log_loss": 0.6904238579145126,
+            "mean_probability": 0.4655580921669291,
+            "positive_rate": 0.46207485594819236
+          }
+        }
+      ],
+      "tolerance_passed": false,
+      "test_evaluated": false
+    }
+  },
+  "control_construction": {
+    "seed": 42,
+    "global_permutation_verified": true,
+    "train_features_unchanged": true,
+    "validation_files_unchanged": true,
+    "train_rows": 1262136,
+    "label_changed_rows": 627830,
+    "permutation_sha256": "b701ef720c14a47ad0825790e30012607395e332405745fbdb07a0da013c384a"
+  },
+  "control_diagnostics": {
+    "initial_model_val": {
+      "rows": 78444,
+      "auc": 0.45421538323419236,
+      "log_loss": 0.6988022625564024,
+      "mean_probability": 0.5245850808049887,
+      "positive_rate": 0.46207485594819236
+    },
+    "initial_logit_std": 0.01603550651077301,
+    "saved_best_logit_std": 0.07697094484625183,
+    "initial_vs_saved_logit_correlation": -0.03426888262527233,
+    "tiny_positive_ctr_score_auc": 0.6788283347861657,
+    "tiny_negative_ctr_score_auc": 0.3211716652138344,
+    "constant_train_prior_val_log_loss": 0.6902914935672715
+  },
+  "verification": {
+    "training_tests_passed": 66,
+    "spark_tests_passed": 47,
+    "pipeline_checks_passed": 86,
+    "fresh_isolated_hdfs_rebuild": true,
+    "fresh_pinned_env_smokes": true,
+    "decoded_gold_rows_equal": 1940143,
+    "gold_columns": 74,
+    "full_cpu_repeats_bit_identical": true,
+    "saved_metric_integrity_passed": true,
+    "phase_acceptance_passed": false,
+    "failed_checks": [
+      "shuffled_label_best_val_auc_within_0.49_0.51"
+    ],
+    "git_finalization": "Pending user commit and PR merge"
+  },
+  "calibration_note": "Random-log click rate is 18.17%; both models overpredict it. No test-driven calibration or tuning was performed.",
+  "control_note": "Both best-AUC shuffled-label controls fail the original narrow tolerance. Construction and metric calculations were independently verified. Untrained/random feature scores can rank these predictive features above or below chance; this does not establish leakage, and the original gate remains failed, not waived."
+}

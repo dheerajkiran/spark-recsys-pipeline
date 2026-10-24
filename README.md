@@ -4,7 +4,7 @@ A distributed data preprocessing pipeline that turns raw short-video interaction
 
 Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features across a cluster of workers, and the result is written back as partitioned **Parquet**. A **PyTorch** CTR model then trains on that data.
 
-> **Status:** The raw-to-gold Spark pipeline is complete (phases 0–4). The PyTorch loader, models, and training/evaluation loop are implemented (checkpoints 5.1–5.4). Full model results and benchmarks are planned.
+> **Status:** The raw-to-gold pipeline, training, and full model results are implemented. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). Benchmarks remain planned.
 
 ---
 
@@ -27,7 +27,7 @@ Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features acro
 15. [Risks and mitigations](#15-risks-and-mitigations)
 16. [Repository layout](#16-repository-layout)
 17. [Running locally](#17-running-locally)
-18. [Results](#18-results-planned)
+18. [Results](#18-results)
 
 ---
 
@@ -518,7 +518,8 @@ zero. Ordinary categorical index zero remains learnable (for example, hour 0).
 Model tests check the LR score, FM formula, and complete DeepFM score against
 independent calculations, padding invariance, gradient flow, and fitting a small
 batch to loss below 0.02.
-Full model results are still planned for checkpoint 5.5.
+Full model results and the control-method correction are recorded in
+[Results](#18-results).
 
 ### Training setup
 
@@ -533,6 +534,12 @@ Full model results are still planned for checkpoint 5.5.
   model run: it evaluates `test` and, when present in the spec, `test_random`
   once each after selection. Tune using validation only; smoke runs do not need
   access to either test directory.
+- To evaluate an already selected run without retraining, use `--evaluate-only
+  --run-dir <run>`. This uses the checkpoint's saved settings and checks its
+  feature spec and selected epoch. Final evaluation requires a full run and
+  rejects training overrides, previous test predictions, or an existing
+  evaluation marker. A failed evaluation retains its marker for investigation;
+  it cannot silently retry held-out data.
 - `num_workers=0` is the default. When workers are requested, they are recreated
   each epoch so they receive the new shuffle epoch; this incurs macOS spawn
   overhead. Persistent workers would retain the loader's previous epoch state.
@@ -550,9 +557,12 @@ specified by `--run-dir`. Existing nonempty directories are rejected. Artifacts:
   digest, full/subset status, global AUC/log loss and mean predicted probability
   versus click rate. Metrics aggregate all rows, including partial batches.
 - `predictions/val.npz`: labels, float64 probabilities and logits from the best
-  epoch; test prediction files are added only with `--evaluate-test`. These are
+  epoch; test prediction files are added only during explicit final evaluation. These are
   the exact predictions used for the reported metrics, allowing independent
   recomputation with scikit-learn.
+- `heldout_evaluation.json`: exclusive final-evaluation marker, selected
+  checkpoint SHA-256, evaluated splits and completion status. Both final
+  evaluation commands share this guard.
 
 ### Metrics
 
@@ -705,7 +715,7 @@ spark-recsys-pipeline/
 **Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, [uv](https://docs.astral.sh/uv/) for the training environment, and about 20 GB of free disk. The pipeline and its tests run inside the cluster, so they need no local Python setup.
 
 All steps below work today. Once gold is exported, training runs on the host
-without starting the containers. Full LR/DeepFM comparison results remain planned.
+without starting the containers. Full LR/DeepFM results are in section 18.
 
 ```bash
 # 1. Start the cluster (first run builds the images, ~3 min)
@@ -730,13 +740,15 @@ uv pip install --python .venv -r requirements-train.txt
 #    Copy gold from HDFS to data/gold/ (checks row counts against feature_spec.json)
 ./scripts/export_gold.sh
 #    Train using train/val only; each command creates a new run directory
-.venv/bin/python training/train_deepfm.py --model lr --config config/pipeline.yaml
-.venv/bin/python training/train_deepfm.py --model deepfm --config config/pipeline.yaml
+.venv/bin/python training/train_deepfm.py --model lr --run-dir checkpoints/lr-full
+.venv/bin/python training/train_deepfm.py --model deepfm --run-dir checkpoints/deepfm-full
 #    Quick one-epoch smoke example (use a new/empty run directory)
 .venv/bin/python training/train_deepfm.py --model lr --epochs 1 \
   --max-train-batches 4 --max-eval-batches 2 --run-dir checkpoints/lr-smoke
-#    For a selected final model run, add --evaluate-test to evaluate held-out
-#    splits once from the best checkpoint. Do not use test results for tuning.
+#    Freeze model choices using validation, then evaluate each saved best once
+.venv/bin/python training/train_deepfm.py --evaluate-only --run-dir checkpoints/lr-full
+.venv/bin/python training/train_deepfm.py --evaluate-only --run-dir checkpoints/deepfm-full
+#    Test results are reporting-only; use validation for tuning.
 
 # 6. Run tests: pipeline tests inside the spark-master container,
 #    training tests in the host venv
@@ -757,13 +769,103 @@ Web UIs:
 
 ---
 
-## 18. Results _(planned)_
+## 18. Results
 
-To be filled in after phase 6:
+### Model results (KuaiRand-Pure)
+
+Full runs use CPU, seed 42, two threads, batch size 4,096, Adam at 0.001,
+at most 20 epochs and validation-AUC patience 3. DeepFM uses 16-dimensional
+embeddings and MLP widths 128/64, with dropout 0. Defaults were selected using
+train/validation only; no hyperparameter search was needed to meet the model
+comparison target. Every epoch reads all 1,262,136 training rows.
+
+LR selected epoch 16 (19 epochs run); DeepFM selected epoch 1 (4 epochs run).
+Selected checkpoint hashes and validation metrics were frozen before evaluating
+each held-out split once. Two independent CPU runs per model produced identical
+histories, model/Adam states, checkpoints and validation predictions.
+
+| Model | Split | AUC | Log loss | Mean prediction | Click rate |
+|---|---|---:|---:|---:|---:|
+| LR | val | 0.757196 | 0.579912 | 45.40% | 46.21% |
+| LR | test | 0.747123 | 0.589176 | 41.40% | 44.51% |
+| LR | test_random | 0.666966 | 0.577572 | 40.07% | 18.17% |
+| DeepFM | val | **0.759087** | **0.578749** | 48.12% | 46.21% |
+| DeepFM | test | **0.748956** | **0.585346** | 44.10% | 44.51% |
+| DeepFM | test_random | **0.692255** | **0.577030** | 41.44% | 18.17% |
+
+DeepFM improves validation AUC by 0.001891 over LR. Both models rank worse and
+substantially overpredict clicks on the random-exposure distribution. These test
+results were recorded without further tuning or recalibration.
+
+Full-precision metrics, histories, configurations and checkpoint hashes are in
+[phase5_results.json](training/results/phase5_results.json), with the pre-test
+[selection manifest](training/results/phase5_selection.json) and detailed
+[verification report](training/results/VERIFICATION.md).
+
+### Verification and randomized-target control
+
+All **123 training tests** pass after the control fix. The original phase
+verification also passed 47 Spark tests and 86 pipeline quality checks.
+A separate cluster rebuilt gold from empty HDFS volumes while preserving the
+original data; all 1,940,143 gold rows, row order, schemas and vocabularies match.
+Fresh pinned-environment smokes reproduce previous predictions exactly. Saved
+metrics match scikit-learn and independent rank-sum AUC/log-loss calculations.
+
+**The original train-only shuffled-label diagnostic failed.** Training labels were
+globally permuted once with seed 42, preserving their counts and every feature;
+validation stayed unchanged. Best validation AUC was **0.526577** for DeepFM
+and **0.552329** for a subsequent LR diagnostic, outside the planned 0.49–0.51
+range. All control outcomes are retained; later near-chance epochs were not
+substituted for the selected result.
+
+The permutation, unchanged features and metrics were independently verified.
+An untrained seed-42 DeepFM already scores 0.454215 AUC on validation: a random
+function of predictive features need not score exactly 0.50 for one seed, and
+AUC preserves rankings even when score differences are tiny. This observation
+does not establish leakage. Selecting the highest validation AUC also favors
+above-chance control outcomes. The original failures remain in
+`phase5_results.json`; they have not been relabeled as passes.
+
+The corrected **`permutation-null-v1`** sanity check independently permutes both
+training and control-validation targets. It trains fresh models for fixed
+budgets taken from the original pre-test selection: LR 16 epochs, DeepFM 1.
+Each terminal checkpoint is scored once, without control-validation selection.
+Seed 42, both permutation streams and the original **0.49–0.51** acceptance
+band are recorded before training. LR scores **0.500252** and DeepFM
+**0.499360**, both passing. Original selected models and held-out results are
+unchanged; no held-out inference is repeated.
+
+This is a different experiment, following the randomized-target principle in
+[scikit-learn's permutation test](https://scikit-learn.org/1.5/modules/generated/sklearn.model_selection/permutation_test_score.html).
+One permutation is a pipeline sanity check, without a significance p-value or
+proof that precomputed features are free of temporal leakage. Existing
+strictly-past feature tests remain necessary. Additional tests reject target
+columns in feature roles, confirm both models ignore current batch labels, and
+make the new control fail when current-label scores are deliberately injected.
+The artifact auditor independently reconstructs both permutations, compares
+every feature and row order, and recomputes the metrics.
+
+Protocol, results and verification details are in
+[phase5_control_fix.json](training/results/phase5_control_fix.json) and the
+[verification report](training/results/VERIFICATION.md). To reproduce in a fresh
+directory after obtaining the selected reference checkpoints:
+
+```bash
+.venv/bin/python training/permutation_control.py --gold-dir data/gold \
+  --run-dir checkpoints/permutation-control \
+  --selection-manifest training/results/phase5_selection.json --seed 42
+.venv/bin/python scripts/verify_training_results.py --gold-dir data/gold \
+  --permutation-control checkpoints/permutation-control \
+  --output checkpoints/permutation-control-audit.json
+```
+
+The legacy `shuffle_labels.py` default still copies real validation labels;
+`verify_training_results.py --control` retains its original failing criterion.
+
+### Engineering benchmarks (planned for phase 6)
 
 - Pipeline runtime with 1, 2 and 3 workers (plot)
 - Skew handling: naive join vs. AQE vs. salting (stage times, task-time distribution)
 - Spark vs. pandas baseline across data sizes
 - CSV vs. Parquet scan performance
-- Model metrics: DeepFM vs. logistic regression (AUC, log loss)
 - Spark UI screenshots of key stages
