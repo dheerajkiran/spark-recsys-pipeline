@@ -1,0 +1,73 @@
+{
+  "frozen_at": "2026-10-23T20:13:42.940302+00:00",
+  "selection_data": "train and val only",
+  "selection_rule": "Default checkpoint 5.4 settings; highest validation AUC; no test-driven tuning",
+  "training_revision": "6986567f5fe270fc9519931832e6b51e6efbd17c",
+  "models": {
+    "lr": {
+      "run_dir": "checkpoints/phase55-lr-default",
+      "checkpoint_sha256": "cd60fd3ca9caf8a9732e87e13e519e8c82ecaf7420601bb1ebe90de778b46f09",
+      "config": {
+        "model": "lr",
+        "epochs": 20,
+        "batch_size": 4096,
+        "learning_rate": 0.001,
+        "patience": 3,
+        "seed": 42,
+        "embedding_dim": 16,
+        "hidden_dims": [
+          128,
+          64
+        ],
+        "dropout": 0.0,
+        "num_workers": 0,
+        "threads": 2,
+        "max_train_batches": null,
+        "max_eval_batches": null,
+        "evaluate_test": false
+      },
+      "best_epoch": 16,
+      "val": {
+        "rows": 78444,
+        "auc": 0.7571961119726672,
+        "log_loss": 0.5799123587552835,
+        "mean_probability": 0.4539953875218635,
+        "positive_rate": 0.46207485594819236
+      },
+      "feature_spec_sha256": "660344ef2edd9b6185d43a813f6ba1ef5c380315eb9040e5d640e2c4e6e3ee5f"
+    },
+    "deepfm": {
+      "run_dir": "checkpoints/phase55-deepfm-default",
+      "checkpoint_sha256": "c4c558cfa632af7defcfc0607fd656275cafb7653771f472e3a2f392fa1026cc",
+      "config": {
+        "model": "deepfm",
+        "epochs": 20,
+        "batch_size": 4096,
+        "learning_rate": 0.001,
+        "patience": 3,
+        "seed": 42,
+        "embedding_dim": 16,
+        "hidden_dims": [
+          128,
+          64
+        ],
+        "dropout": 0.0,
+        "num_workers": 0,
+        "threads": 2,
+        "max_train_batches": null,
+        "max_eval_batches": null,
+        "evaluate_test": false
+      },
+      "best_epoch": 1,
+      "val": {
+        "rows": 78444,
+        "auc": 0.759087001663055,
+        "log_loss": 0.5787487652895991,
+        "mean_probability": 0.4811564919239348,
+        "positive_rate": 0.46207485594819236
+      },
+      "feature_spec_sha256": "660344ef2edd9b6185d43a813f6ba1ef5c380315eb9040e5d640e2c4e6e3ee5f"
+    }
+  },
+  "control_status": "Original shuffled-label AUC tolerance failed for both models; retained and investigated, not treated as passed."
+}
