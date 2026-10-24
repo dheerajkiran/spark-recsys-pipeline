@@ -1,0 +1,272 @@
+{
+  "recorded_at": "2026-10-24T00:38:50.321845+00:00",
+  "purpose": "Correct the randomized-target pipeline sanity check while retaining historical failed diagnostics and all original model results.",
+  "reference_selection": "phase5_selection.json",
+  "historical_results_snapshot": "phase5_results.json",
+  "historical_control": {
+    "protocol": "train-only permutation; original validation; best-AUC epoch selection",
+    "passed_original_band": false,
+    "deepfm_auc": 0.5265771516217943,
+    "lr_auc": 0.5523289495978607,
+    "status": "Original failures retained; not relabeled as passed."
+  },
+  "method_correction": {
+    "reason": "A random fitted function of predictive validation features need not rank original validation targets at chance. Maximizing validation AUC also biases the old diagnostic.",
+    "new_estimand": "Terminal-checkpoint discrimination under independently randomized train and validation targets.",
+    "declaration": "Protocol and original selection bytes saved before training; no reseeding or outcome-dependent budget changes.",
+    "limitation": "One randomized-target pipeline sanity check; no formal permutation p-value and no proof that original precomputed features are leakage-free.",
+    "source": "https://scikit-learn.org/1.5/modules/generated/sklearn.model_selection/permutation_test_score.html"
+  },
+  "protocol": {
+    "id": "permutation-null-v1",
+    "seed": 42,
+    "selection_sha256": "ab67f375484986bc99aa31fea562159a7100c976e814a2a7e2b45ed6d23e1622",
+    "feature_spec_sha256": "660344ef2edd9b6185d43a813f6ba1ef5c380315eb9040e5d640e2c4e6e3ee5f",
+    "auc_band": [
+      0.49,
+      0.51
+    ],
+    "selection_rule": "fixed_terminal_epoch",
+    "budgets": {
+      "lr": 16,
+      "deepfm": 1
+    },
+    "selected_checkpoint_sha256": {
+      "lr": "cd60fd3ca9caf8a9732e87e13e519e8c82ecaf7420601bb1ebe90de778b46f09",
+      "deepfm": "c4c558cfa632af7defcfc0607fd656275cafb7653771f472e3a2f392fa1026cc"
+    }
+  },
+  "shuffle": {
+    "label_counts": {
+      "0": 674600,
+      "1": 587536
+    },
+    "permutation_encoding": "zero-based indices, little-endian int64, sorted train file order",
+    "permutation_sha256": "b701ef720c14a47ad0825790e30012607395e332405745fbdb07a0da013c384a",
+    "protocol": "permuted-train-and-validation-v1",
+    "seed": 42,
+    "source_gold_dir": "data/gold",
+    "train_files": 8,
+    "train_rows": 1262136,
+    "val_files": 2,
+    "val_label_counts": {
+      "0": 42197,
+      "1": 36247
+    },
+    "val_permutation_sha256": "327af9193150470c0061cf5cff5190087f5d2e93022f2b92bdd9571198603a76",
+    "val_rows": 78444,
+    "validation_permuted": true
+  },
+  "run_dir": "checkpoints/phase55-permutation-control",
+  "repeat_run_dir": "checkpoints/phase55-permutation-repeat",
+  "models": {
+    "lr": {
+      "model": "lr",
+      "config": {
+        "model": "lr",
+        "epochs": 20,
+        "batch_size": 4096,
+        "learning_rate": 0.001,
+        "patience": 3,
+        "seed": 42,
+        "embedding_dim": 16,
+        "hidden_dims": [
+          128,
+          64
+        ],
+        "dropout": 0.0,
+        "num_workers": 0,
+        "threads": 2,
+        "max_train_batches": null,
+        "max_eval_batches": null,
+        "evaluate_test": false
+      },
+      "epochs": 16,
+      "history": [
+        {
+          "epoch": 1,
+          "train_rows": 1262136,
+          "train_loss": 0.6911309849656992
+        },
+        {
+          "epoch": 2,
+          "train_rows": 1262136,
+          "train_loss": 0.6890821978031878
+        },
+        {
+          "epoch": 3,
+          "train_rows": 1262136,
+          "train_loss": 0.6876380714333105
+        },
+        {
+          "epoch": 4,
+          "train_rows": 1262136,
+          "train_loss": 0.6864646728590137
+        },
+        {
+          "epoch": 5,
+          "train_rows": 1262136,
+          "train_loss": 0.6855119538052967
+        },
+        {
+          "epoch": 6,
+          "train_rows": 1262136,
+          "train_loss": 0.6847064670124571
+        },
+        {
+          "epoch": 7,
+          "train_rows": 1262136,
+          "train_loss": 0.6840357287140051
+        },
+        {
+          "epoch": 8,
+          "train_rows": 1262136,
+          "train_loss": 0.6833581898918915
+        },
+        {
+          "epoch": 9,
+          "train_rows": 1262136,
+          "train_loss": 0.6828402026290501
+        },
+        {
+          "epoch": 10,
+          "train_rows": 1262136,
+          "train_loss": 0.6823344804125595
+        },
+        {
+          "epoch": 11,
+          "train_rows": 1262136,
+          "train_loss": 0.6819083276697766
+        },
+        {
+          "epoch": 12,
+          "train_rows": 1262136,
+          "train_loss": 0.6815039963624344
+        },
+        {
+          "epoch": 13,
+          "train_rows": 1262136,
+          "train_loss": 0.6811379116299785
+        },
+        {
+          "epoch": 14,
+          "train_rows": 1262136,
+          "train_loss": 0.6808030822134683
+        },
+        {
+          "epoch": 15,
+          "train_rows": 1262136,
+          "train_loss": 0.6805290226425605
+        },
+        {
+          "epoch": 16,
+          "train_rows": 1262136,
+          "train_loss": 0.6802777544895517
+        }
+      ],
+      "validation": {
+        "rows": 78444,
+        "auc": 0.5002521106925855,
+        "log_loss": 0.6973312045819866,
+        "mean_probability": 0.46527121213756717,
+        "positive_rate": 0.46207485594819236
+      },
+      "checkpoint_sha256": "2acbd3e9de0acd6533ec733c904c3525c6c7b9d3af5f973847cbe4e71cef50ce",
+      "prediction_sha256": "afbc5c579e5f99230fe31872ac8993c17ab90232b22cc16488ac2b362e374dd5",
+      "passed": true
+    },
+    "deepfm": {
+      "model": "deepfm",
+      "config": {
+        "model": "deepfm",
+        "epochs": 20,
+        "batch_size": 4096,
+        "learning_rate": 0.001,
+        "patience": 3,
+        "seed": 42,
+        "embedding_dim": 16,
+        "hidden_dims": [
+          128,
+          64
+        ],
+        "dropout": 0.0,
+        "num_workers": 0,
+        "threads": 2,
+        "max_train_batches": null,
+        "max_eval_batches": null,
+        "evaluate_test": false
+      },
+      "epochs": 1,
+      "history": [
+        {
+          "epoch": 1,
+          "train_rows": 1262136,
+          "train_loss": 0.6913374972445584
+        }
+      ],
+      "validation": {
+        "rows": 78444,
+        "auc": 0.49935984889439367,
+        "log_loss": 0.6913575372086852,
+        "mean_probability": 0.47434959916683944,
+        "positive_rate": 0.46207485594819236
+      },
+      "checkpoint_sha256": "1dccc73c37b104b8f136ddccd7b61313e6bcae10547424c12a499911318878b1",
+      "prediction_sha256": "dd46ba6b0c5e50e2054a375bbd829546db8d4c4eb9d8eafc46db3b656eca0803",
+      "passed": true
+    }
+  },
+  "verification": {
+    "revised_protocol_passed": true,
+    "combined_saved_artifact_audit_passed": true,
+    "audit_path": "checkpoints/phase55-control-fix/revised-phase-acceptance.json",
+    "audit_sha256": "f8968d5fbddd7b22cb5912085997397140f52de5333e451d795a196eb1dc2e4c",
+    "control_repeat_bit_identical": true,
+    "original_artifacts_unchanged": true,
+    "original_artifact_count": 14,
+    "original_artifact_sha256": {
+      "training/results/phase5_selection.json": "ab67f375484986bc99aa31fea562159a7100c976e814a2a7e2b45ed6d23e1622",
+      "training/results/phase5_results.json": "08949ea2463a0bc381092b20b509f5b4b840f756c2f07aa6ff0cae0abf855067",
+      "checkpoints/phase55-lr-default/metrics.json": "6ded75a7db0fb548a31bec23befc2f724dcaecc02bc70a44bf9417cea1c6f0f4",
+      "checkpoints/phase55-lr-default/heldout_evaluation.json": "20720f028bf476229b3a5941dc9bd5eb4505c4d91ee038608fed9bfb8fb7705e",
+      "checkpoints/phase55-lr-default/best.pt": "cd60fd3ca9caf8a9732e87e13e519e8c82ecaf7420601bb1ebe90de778b46f09",
+      "checkpoints/phase55-lr-default/predictions/test.npz": "36c5c0fd0d3e67767bb7a3e90a742c840bcb791f6586066365537d1d35597e2e",
+      "checkpoints/phase55-lr-default/predictions/val.npz": "321ab9d9f84f276135e6840d3b10bf045a9966a2f4f5b67ae760c527284469e7",
+      "checkpoints/phase55-lr-default/predictions/test_random.npz": "ab4e302d81716bdd3f7a70aef9c996f25d7c1a8acef2be876201034ef119e12f",
+      "checkpoints/phase55-deepfm-default/metrics.json": "0ccd2ad9d992e5d99f1b59883e7fe4c53947c0f5f26a8d716f5ae044d40a184e",
+      "checkpoints/phase55-deepfm-default/heldout_evaluation.json": "b3e4dda332f1167064cc6d71fa4f3f6b0b7cc307fc5a0f25698f2a8ede8b15ba",
+      "checkpoints/phase55-deepfm-default/best.pt": "c4c558cfa632af7defcfc0607fd656275cafb7653771f472e3a2f392fa1026cc",
+      "checkpoints/phase55-deepfm-default/predictions/test.npz": "2a95f0892be399c0c044ea00521f83fc42e2bd9d21587468b3b545b26b9f7141",
+      "checkpoints/phase55-deepfm-default/predictions/val.npz": "8ef206a8019f531e9130480908caf9ca9c3c2d048701bb4d898c7992f4740007",
+      "checkpoints/phase55-deepfm-default/predictions/test_random.npz": "6bae3e6dac6ffd3333ec11cdd36f5d964c9ada69a53e10ee8b4e126ddf2a21c8"
+    },
+    "training_tests": {
+      "passed": 123,
+      "failed": 0,
+      "seconds": 32.43,
+      "command": ".venv/bin/python -m pytest training/tests -q"
+    },
+    "adversarial_checks": [
+      "Direct current-label scores yield AUC 1 and fail the new gate.",
+      "Both models produce identical logits with flipped or omitted current labels.",
+      "All target aliases are excluded from categorical/numeric/flag/sequence feature roles.",
+      "Changing randomized validation labels leaves trained weights unchanged.",
+      "Independent audit rejects corrupted features/targets, budgets, bands, metrics, tolerances and nonfinite/empty checkpoint states."
+    ],
+    "earlier_container_checks": {
+      "spark_tests_passed": 47,
+      "pipeline_checks_passed": 86,
+      "scope": "Original phase verification; unchanged Spark/pipeline code. Container jobs were not repeated for the control fix."
+    },
+    "heldout_inference_repeated": false,
+    "selected_models_retuned": false,
+    "git_finalization": "Verification recorded before final commit; see associated checkpoint pull request for commit and merge provenance."
+  },
+  "implementation_sha256": {
+    "training/permutation_control.py": "0f9226b294de4a1ce2ffc408a4e2c893a57a8b4cb342669a1a1ebfd20f1855a9",
+    "training/train_deepfm.py": "9842597d6026fd937b17599638d08cca3eb1073554c5db400f461b6fb61f3149",
+    "training/shuffle_labels.py": "ad4fe6e17444a6d0ed282b5ecf926ff2b520785339f2179962b377d35fdd3f5b",
+    "training/dataset.py": "471f9f1de965c460cfde48dd054cbaf7bc5c8817e1c2ddc102a4e324aa34db76",
+    "scripts/verify_training_results.py": "f65f2665f770ba2e39f2f98b7c4f626b7697b57ee05e1404c511efe0ed42919f"
+  }
+}

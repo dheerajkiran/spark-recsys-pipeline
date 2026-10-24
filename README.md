@@ -4,7 +4,7 @@ A distributed data preprocessing pipeline that turns raw short-video interaction
 
 Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features across a cluster of workers, and the result is written back as partitioned **Parquet**. A **PyTorch** CTR model then trains on that data.
 
-> **Status:** The raw-to-gold pipeline, training, and full model results are implemented. Phase 5 verification has an unresolved shuffled-label control failure (see Results). Benchmarks remain planned.
+> **Status:** The raw-to-gold pipeline, training, and full model results are implemented. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). Benchmarks remain planned.
 
 ---
 
@@ -518,7 +518,7 @@ zero. Ordinary categorical index zero remains learnable (for example, hour 0).
 Model tests check the LR score, FM formula, and complete DeepFM score against
 independent calculations, padding invariance, gradient flow, and fitting a small
 batch to loss below 0.02.
-Full model results and the remaining phase-verification issue are recorded in
+Full model results and the control-method correction are recorded in
 [Results](#18-results).
 
 ### Training setup
@@ -802,15 +802,16 @@ Full-precision metrics, histories, configurations and checkpoint hashes are in
 [selection manifest](training/results/phase5_selection.json) and detailed
 [verification report](training/results/VERIFICATION.md).
 
-### Verification and unresolved control
+### Verification and randomized-target control
 
-All 66 training tests, 47 Spark tests and 86 pipeline quality checks passed.
+All **123 training tests** pass after the control fix. The original phase
+verification also passed 47 Spark tests and 86 pipeline quality checks.
 A separate cluster rebuilt gold from empty HDFS volumes while preserving the
 original data; all 1,940,143 gold rows, row order, schemas and vocabularies match.
 Fresh pinned-environment smokes reproduce previous predictions exactly. Saved
 metrics match scikit-learn and independent rank-sum AUC/log-loss calculations.
 
-**The original shuffled-label acceptance gate fails.** Training labels were
+**The original train-only shuffled-label diagnostic failed.** Training labels were
 globally permuted once with seed 42, preserving their counts and every feature;
 validation stayed unchanged. Best validation AUC was **0.526577** for DeepFM
 and **0.552329** for a subsequent LR diagnostic, outside the planned 0.49–0.51
@@ -821,17 +822,45 @@ The permutation, unchanged features and metrics were independently verified.
 An untrained seed-42 DeepFM already scores 0.454215 AUC on validation: a random
 function of predictive features need not score exactly 0.50 for one seed, and
 AUC preserves rankings even when score differences are tiny. This observation
-does not establish leakage or waive the failed gate. **Phase 5 is not marked
-complete until the control requirement is resolved.**
+does not establish leakage. Selecting the highest validation AUC also favors
+above-chance control outcomes. The original failures remain in
+`phase5_results.json`; they have not been relabeled as passes.
 
-To reproduce the control in new directories:
+The corrected **`permutation-null-v1`** sanity check independently permutes both
+training and control-validation targets. It trains fresh models for fixed
+budgets taken from the original pre-test selection: LR 16 epochs, DeepFM 1.
+Each terminal checkpoint is scored once, without control-validation selection.
+Seed 42, both permutation streams and the original **0.49–0.51** acceptance
+band are recorded before training. LR scores **0.500252** and DeepFM
+**0.499360**, both passing. Original selected models and held-out results are
+unchanged; no held-out inference is repeated.
+
+This is a different experiment, following the randomized-target principle in
+[scikit-learn's permutation test](https://scikit-learn.org/1.5/modules/generated/sklearn.model_selection/permutation_test_score.html).
+One permutation is a pipeline sanity check, without a significance p-value or
+proof that precomputed features are free of temporal leakage. Existing
+strictly-past feature tests remain necessary. Additional tests reject target
+columns in feature roles, confirm both models ignore current batch labels, and
+make the new control fail when current-label scores are deliberately injected.
+The artifact auditor independently reconstructs both permutations, compares
+every feature and row order, and recomputes the metrics.
+
+Protocol, results and verification details are in
+[phase5_control_fix.json](training/results/phase5_control_fix.json) and the
+[verification report](training/results/VERIFICATION.md). To reproduce in a fresh
+directory after obtaining the selected reference checkpoints:
 
 ```bash
-.venv/bin/python training/shuffle_labels.py --gold-dir data/gold \
-  --output-dir checkpoints/shuffled-gold --seed 42
-.venv/bin/python training/train_deepfm.py --model deepfm \
-  --gold-dir checkpoints/shuffled-gold --run-dir checkpoints/shuffled-control
+.venv/bin/python training/permutation_control.py --gold-dir data/gold \
+  --run-dir checkpoints/permutation-control \
+  --selection-manifest training/results/phase5_selection.json --seed 42
+.venv/bin/python scripts/verify_training_results.py --gold-dir data/gold \
+  --permutation-control checkpoints/permutation-control \
+  --output checkpoints/permutation-control-audit.json
 ```
+
+The legacy `shuffle_labels.py` default still copies real validation labels;
+`verify_training_results.py --control` retains its original failing criterion.
 
 ### Engineering benchmarks (planned for phase 6)
 

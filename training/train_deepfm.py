@@ -131,6 +131,29 @@ def check_rows(spec, split, rows, limit):
         raise ValueError(f"{split}: read {rows} rows; spec expects {spec['splits'][split]['rows']}")
 
 
+def train_epoch(model, optimizer, loader, max_batches=None):
+    """One training pass, shared by selected-model and fixed-budget controls."""
+    model.train()
+    loss_fn = nn.BCEWithLogitsLoss()
+    total_loss, rows = 0.0, 0
+    for batch in islice(loader, max_batches):
+        optimizer.zero_grad(set_to_none=True)
+        logits = model(batch)
+        if logits.shape != batch["label"].shape:
+            raise ValueError("Model must return [B] logits")
+        loss = loss_fn(logits, batch["label"])
+        if not torch.isfinite(loss):
+            raise ValueError("Training loss is not finite")
+        loss.backward()
+        optimizer.step()
+        n = len(batch["label"])
+        total_loss += loss.item() * n
+        rows += n
+    if rows == 0:
+        raise ValueError("Training split is empty")
+    return {"loss": total_loss / rows, "rows": rows}
+
+
 def evaluate_saved_checkpoint(gold_dir, run_dir) -> dict:
     """Evaluate held-out splits once from a selected full-run checkpoint.
 
@@ -209,35 +232,20 @@ def run_training(gold_dir, run_dir, config: TrainConfig) -> dict:
     prediction_dir.mkdir()
     model = make_model(spec, config)
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-    loss_fn = nn.BCEWithLogitsLoss()
     history = []
     best_auc, best_epoch, stale_epochs = -math.inf, 0, 0
     best_val = None
     for epoch in range(1, config.epochs + 1):
         train_data.set_epoch(epoch - 1)
-        model.train()
-        total_loss, rows = 0.0, 0
-        for batch in islice(make_loader(train_data, config), config.max_train_batches):
-            optimizer.zero_grad(set_to_none=True)
-            logits = model(batch)
-            if logits.shape != batch["label"].shape:
-                raise ValueError("Model must return [B] logits")
-            loss = loss_fn(logits, batch["label"])
-            if not torch.isfinite(loss):
-                raise ValueError("Training loss is not finite")
-            loss.backward()
-            optimizer.step()
-            n = len(batch["label"])
-            total_loss += loss.item() * n
-            rows += n
-        if rows == 0:
-            raise ValueError("Training split is empty")
+        trained = train_epoch(model, optimizer, make_loader(train_data, config),
+                              config.max_train_batches)
+        rows, train_loss = trained["rows"], trained["loss"]
         check_rows(spec, "train", rows, config.max_train_batches)
         val, predictions = evaluate(model, make_loader(val_data, config), config.max_eval_batches)
         check_rows(spec, "val", val["rows"], config.max_eval_batches)
-        history.append({"epoch": epoch, "train_loss": total_loss / rows,
+        history.append({"epoch": epoch, "train_loss": train_loss,
                         "train_rows": rows, "val": val})
-        print(f"epoch={epoch} train_rows={rows} train_loss={total_loss / rows:.6f} "
+        print(f"epoch={epoch} train_rows={rows} train_loss={train_loss:.6f} "
               f"val_auc={val['auc']:.6f} val_log_loss={val['log_loss']:.6f}", flush=True)
         if val["auc"] > best_auc:
             best_auc, best_epoch, best_val, stale_epochs = val["auc"], epoch, val, 0

@@ -43,6 +43,26 @@ def test_output_and_gradients(model_type, size):
     assert model.history.weight.grad[0].count_nonzero() == 0
 
 
+@pytest.mark.parametrize("model_type", [LogisticRegression, DeepFM])
+def test_logits_do_not_depend_on_current_targets(model_type):
+    torch.manual_seed(42)
+    model = (DeepFM(SPEC, embedding_dim=4, hidden_dims=(8,), dropout=0.5)
+             if model_type is DeepFM else LogisticRegression(SPEC)).eval()
+    b = batch()
+    b["numeric"][:, 0] = torch.linspace(-1, 1, 16)
+    b["numeric"][:, 1] = (torch.arange(16) % 3 == 0).float()
+    # Nonzero LR weights and varied features avoid a constant-score comparison.
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.normal_(std=0.05)
+        expected = model(b)
+        assert expected.unique().numel() > 1
+        flipped = {**b, "label": 1 - b["label"]}
+        without_target = {key: value for key, value in b.items() if key != "label"}
+        assert torch.equal(model(flipped), expected)
+        assert torch.equal(model(without_target), expected)
+
+
 def test_history_mean_excludes_padding_even_with_nonzero_pad_embedding():
     table = nn.Embedding(5, 2, padding_idx=0)
     with torch.no_grad():

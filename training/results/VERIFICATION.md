@@ -1,8 +1,10 @@
 # Phase 5 verification — 2026-10-23
 
-**Model results and implementation checks are verified. Phase acceptance remains
-failed on the original shuffled-label AUC gate.** This report does not waive or
-replace that requirement. Final Git commit/PR checks remain pending.
+**Model results and the corrected randomized-target sanity check pass.** The
+original train-only control failed and remains recorded. Its interpretation was
+corrected explicitly under `permutation-null-v1`, described below; the old
+outcomes were not changed. Commit and merge provenance is recorded in the pull
+request associated with this checkpoint.
 
 ## Results and selection
 
@@ -20,7 +22,10 @@ selected checkpoint then evaluated `test` and `test_random` once. Independent
 verification checks the freeze/evaluation timestamps and completion markers.
 No model choices or calibration were changed using held-out results.
 
-Full-precision metrics and histories: [phase5_results.json](phase5_results.json).
+Original full-precision metrics, histories and failed-control snapshot:
+[phase5_results.json](phase5_results.json). Corrected protocol and results:
+[phase5_control_fix.json](phase5_control_fix.json). Both original JSON reports,
+selected checkpoints and all selected-model predictions remain byte-identical.
 Run artifacts are local and ignored by Git:
 
 | Model | Selected run | Repeat run |
@@ -32,15 +37,15 @@ Run artifacts are local and ignored by Git:
 
 | Check | Outcome | Evidence |
 |---|---|---|
-| S1 unit tests | PASS | 66 training tests (31.45 s); 47 Spark tests (12.30 s) |
+| S1 unit tests | PASS | 123 training tests (32.43 s) after the fix; original verification had 47 Spark tests (12.30 s) |
 | S2 mutation checks | PASS | Omitting checkpoint load, row checks, or exclusive evaluation guards makes targeted tests fail; production tests pass |
 | S3 stage checks | PASS | 86 PASS, 0 FAIL, 0 quality WARN across ingest/clean/features/build_dataset |
-| S4 independent recomputation | PASS | All six metric sets match sklearn and manual tied-rank AUC/BCE; saved labels match independently read gold order |
-| S5 determinism | PASS | Full CPU repeats exact; decoded gold rows/schemas/order/vocabularies exact across old and fresh HDFS builds |
+| S4 independent recomputation | PASS | All six original metric sets and both new control metrics match sklearn/manual AUC/BCE; full train/val permutations and every non-label column independently checked |
+| S5 determinism | PASS | Original full CPU repeats and new fixed-budget control repeats exact; decoded gold rows/schemas/order/vocabularies exact across old and fresh HDFS builds |
 | S6 clean slate | PASS, isolated namespace | New project volumes started empty, raw reloaded, smoke and all stages run, rebuilt gold exported separately, fresh-env smokes pass |
 | S7 earlier phases | PASS | Smoke reads 1,436,609 rows; 3 executors; Parquet roundtrip; replication 2; all Spark tests and pipeline checks pass |
-| S8 documentation | Verified with failure retained | README numbers match full-precision results; control failure and random-log miscalibration are explicit |
-| S9 Git finalization | PENDING | Branch `phase5-results` is based on `main` at `6986567`; user commit and PR remain |
+| S8 documentation | Verified with history retained | README matches results; revised control method, historical failures and random-log miscalibration are explicit |
+| S9 Git finalization | See associated PR | Branch `phase5-results` is based on `main` at `6986567`; original results are recorded in `01cee94`; PR metadata records final commits and merge |
 
 Clean-slate verification used isolated project `phase55-verify`, container names
 `phase55-*`, fresh HDFS/event volumes, and no published ports. Images, service
@@ -64,8 +69,10 @@ evaluate held-out data.
 
 Expected runtime warnings are native-Hadoop fallback to Java, truncated Spark
 plan display, and global windows for vocabulary indexing/previous-day rates.
-Sandbox OpenMP shared-memory restrictions required running multiprocessing
-tests outside the sandbox; all 66 tests pass there.
+Sandbox OpenMP shared-memory restrictions require running multiprocessing
+tests outside the sandbox. The fix reruns the complete training suite. Spark,
+pipeline and clean-slate results above are from the original verification;
+their code is unchanged and those container jobs were not repeated for this fix.
 
 ## Phase-specific acceptance
 
@@ -80,7 +87,8 @@ tests outside the sandbox; all 66 tests pass there.
 | CPU reproducibility | PASS: both full runs repeated exactly |
 | Fresh environment | PASS: pinned fresh env plus newly exported gold and both smokes |
 | Calibration glance | REVIEWED: mean predictions/click rates reported; random-log overprediction remains |
-| Shuffled-label AUC 0.49–0.51 | **FAIL: DeepFM 0.526577, LR diagnostic 0.552329** |
+| Randomized-target pipeline sanity, `permutation-null-v1` | **PASS: LR 0.500252, DeepFM 0.499360**, same 0.49–0.51 band |
+| Historical train-only shuffled-label diagnostic | **Original FAIL retained:** DeepFM 0.526577, LR diagnostic 0.552329 |
 
 ### Shuffled-label failure investigation
 
@@ -102,8 +110,67 @@ tiny scores proportional to plus/minus scaled `user_hist_ctr` rank at
 function of predictive features need not rank at exactly 0.50. The trained
 control's initial-versus-final logit correlation is only -0.0343; the audit does
 not claim it simply preserves initialization. These diagnostics explain why
-the narrow single-run threshold warrants review; they do **not** establish that
-leakage is absent or turn the failed gate into a pass. Phase 5 remains open.
+the original experiment does not define a randomized-target validation null;
+they do **not** establish that leakage is absent or turn its failure into a pass.
+
+### Corrected protocol: `permutation-null-v1`
+
+The old experiment randomized fitting targets while scoring against predictable
+real validation targets, then maximized validation AUC over epochs. A random
+learned function of predictive features need not rank those original targets at
+0.50, and best-epoch selection introduces further optimism. The corrected
+experiment randomizes targets for both fitting and scoring. This adapts the
+feature/target-independence principle in
+[scikit-learn 1.5's permutation test](https://scikit-learn.org/1.5/modules/generated/sklearn.model_selection/permutation_test_score.html)
+to the existing fixed temporal train/validation split. It changes the question
+being tested; it is not a rerun of the original diagnostic.
+
+Before training, `training/permutation_control.py` writes a protocol and an exact
+copy of the original pre-test selection manifest. It validates the original
+checkpoint hashes/configs/specs/selected epochs, then initializes fresh models.
+Architecture, Adam settings, batch size and model seed stay fixed. Training
+budgets come from that original manifest: **LR 16 epochs, DeepFM 1**. No
+validation is scored until the saved terminal checkpoint, with no early stopping
+or best-control selection. The control seed stays 42, and the original
+**0.49–0.51** band is unchanged.
+
+Targets are globally permuted once within each split using independent streams:
+train `default_rng(42)`, validation `default_rng([42, 1])`. Per-split class counts,
+all features, schemas and row order are preserved. Only train/validation are
+read or copied. The training permutation matches the old control. Validation
+permutation SHA256 (little-endian int64 indices, sorted Parquet file order):
+`327af9193150470c0061cf5cff5190087f5d2e93022f2b92bdd9571198603a76`.
+
+| Model | Fixed epochs | Train rows per epoch | Control val rows | AUC | Log loss |
+|---|---:|---:|---:|---:|---:|
+| LR | 16 | 1,262,136 | 78,444 | 0.5002521106925855 | 0.6973312045819866 |
+| DeepFM | 1 | 1,262,136 | 78,444 | 0.49935984889439367 | 0.6913575372086852 |
+
+Both fresh runs pass. A complete repeated control reproduces histories,
+model/Adam states, checkpoint bytes and predictions exactly. Independent audit
+reconstructs both permutations, compares every non-label value and row order,
+and recomputes metrics with sklearn and manual rank-sum/BCE. Hash checks confirm
+all 14 original selected-run/report artifacts are unchanged. No original model
+is retuned and no held-out inference is repeated.
+
+Tests make the interpretation explicit:
+
+- Both model scores are bit-identical when current batch labels are flipped or
+  removed; target/source-target aliases are rejected in every feature role.
+- Deliberately returning current-label scores yields AUC 1 and fails the new
+  gate, including an independent audit of the saved scores.
+- Changing control-validation targets cannot change the trained model state.
+- The auditor rejects changed features/labels, wrong terminal epochs, widened
+  bands, false pass claims, NaN metrics, invalid tolerances and nonfinite or empty
+  checkpoint states.
+
+This is a **pipeline sanity check**, not a permutation significance test: one
+permutation provides no formal p-value. Randomizing validation targets can hide
+a feature derived from the original target, so this check does not certify
+precomputed features against leakage. Existing tests for strictly earlier
+timestamps, same-timestamp exclusion and previous-day statistics remain
+necessary. Saved-artifact auditing checks integrity and recomputes metrics;
+it does not rerun inference to prove predictions came from the saved weights.
 
 ### Random-log calibration
 
@@ -114,8 +181,17 @@ and 44.10% DeepFM against 44.51% observed clicks.
 
 ## Reproducing the artifact audit
 
-After reproducing the full runs and controls in fresh directories, this command
-reads the saved predictions/checkpoints and never runs model inference:
+Run the corrected control in a fresh directory after obtaining the selected
+reference checkpoints:
+
+```bash
+.venv/bin/python training/permutation_control.py --gold-dir data/gold \
+  --run-dir checkpoints/phase55-permutation-control \
+  --selection-manifest training/results/phase5_selection.json --seed 42
+```
+
+This combined revised-protocol audit reads saved predictions/checkpoints and
+never runs model inference:
 
 ```bash
 .venv/bin/python scripts/verify_training_results.py \
@@ -124,14 +200,14 @@ reads the saved predictions/checkpoints and never runs model inference:
   --reproduce checkpoints/phase55-lr-default checkpoints/phase55-lr-repeat \
   --reproduce checkpoints/phase55-deepfm-default checkpoints/phase55-deepfm-repeat \
   --include-holdouts \
-  --control checkpoints/phase55-shuffled-control \
-  --control checkpoints/phase55-shuffled-lr-diagnostic \
-  --output checkpoints/phase55-verification/phase-acceptance.json
+  --permutation-control checkpoints/phase55-permutation-control \
+  --output checkpoints/phase55-control-fix/revised-phase-acceptance.json
 ```
 
-The audit correctly exits **1** because of the two control thresholds; all
-selected-model integrity/reproducibility checks pass. Omitting controls produces
-a model-integrity report, not a declaration that full phase acceptance passed.
+The revised-protocol audit exits **0**. The legacy `--control` option is unchanged:
+using the two old train-only controls still correctly exits **1**. The original
+failed audit is retained at `checkpoints/phase55-verification/phase-acceptance.json`.
+Omitting all controls produces a model-integrity report only.
 
 To generate a reproducible isolated stack/runbook without contacting Docker:
 
