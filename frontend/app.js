@@ -1,5 +1,6 @@
 import { categories, posts } from './assets/catalog.js';
 import { loadState, saveState, toggleItem, getVisiblePosts, formatCount } from './feed-state.js';
+import { fetchModelPreview, fetchModelScores } from './model-preview.js';
 
 const paths = {
   home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
@@ -39,6 +40,7 @@ try { storage = window.localStorage; } catch { /* Browser may disable storage. *
 let state = loadState(storage);
 let view = 'for-you', category = 'All', query = '', mixOffset = 0, activeId = null;
 let visible = [], observer, toastTimer, muted = true;
+let modalGeneration = 0, modelPreview = null, selectedProfileId = '';
 const userPaused = new Set();
 const sessionComments = new Map();
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -174,11 +176,71 @@ function changeView(next) {
   updateNav(); renderFeed();
 }
 function showModal(title, content, eyebrow = 'A LITTLE MORE YOU') {
+  modalGeneration += 1;
+  modal.classList.remove('model-modal');
   $('#modal-title').textContent = title;
   $('#modal-eyebrow').textContent = eyebrow;
   $('#modal-content').innerHTML = `<div class="modal-body">${content}</div>`;
   feed.querySelectorAll('video').forEach(video => video.pause());
   if (!modal.open) modal.showModal();
+  return modalGeneration;
+}
+function updateModelIndicator(ready) {
+  const launch = $('.model-launch');
+  launch.classList.toggle('connected', ready);
+  $('.model-launch-label').textContent = ready ? 'DeepFM ready' : 'Try DeepFM';
+}
+function previewIsCurrent(generation) {
+  return modal.open && modalGeneration === generation;
+}
+function showModelUnavailable(message, generation) {
+  if (!previewIsCurrent(generation)) return;
+  updateModelIndicator(false);
+  $('#modal-content').innerHTML = `<div class="modal-body"><div class="model-notice"><strong>The model isn’t available yet.</strong><p>${escape(message)}</p></div><p>This preview needs the project’s Python training environment, saved DeepFM checkpoint and local gold training data. See the frontend setup notes to restore any missing files, then restart the preview server before trying again.</p><p>The scrolling demo remains available while the connection is offline.</p><button class="primary-button" data-action="deepfm">Try the connection again ${icon('refresh')}</button></div>`;
+}
+function renderModelPanel(generation) {
+  if (!previewIsCurrent(generation)) return;
+  const { status, profiles } = modelPreview;
+  if (!profiles.some(profile => profile.id === selectedProfileId)) selectedProfileId = profiles[0]?.id || '';
+  $('#modal-content').innerHTML = `<div class="modal-body"><div class="model-summary"><span class="model-ready-badge"><span></span>Saved model loaded</span><span class="model-split-badge">RECORDED TRAINING EXAMPLES</span></div><p class="model-intro">DeepFM estimates the chance of a click for a user–video interaction. Choose a recorded profile to run the saved model on its historical examples.</p><div class="model-profile-controls"><label for="model-profile">Recorded profile<select id="model-profile">${profiles.map(profile => `<option value="${escape(profile.id)}" ${profile.id === selectedProfileId ? 'selected' : ''}>${escape(profile.name)} · user ${escape(profile.id)} · ${profile.example_count} examples</option>`).join('')}</select></label><button id="model-score-button" class="primary-button" data-action="deepfm-score" ${profiles.length ? '' : 'disabled'}>Run prediction ${icon('sparkles')}</button></div><div id="model-score-results" aria-live="polite"><div class="model-result-placeholder">${icon('sparkles')}<p>Run a prediction to see real model outputs here.</p></div></div><details class="model-provenance"><summary>Model and data details</summary><dl><div><dt>Model</dt><dd>DeepFM · selected epoch ${status.selected_epoch}</dd></div><div><dt>Checkpoint SHA256</dt><dd class="checkpoint-hash">${escape(status.checkpoint_sha256)}</dd></div><div><dt>Source</dt><dd>Local gold training split</dd></div></dl><p>Each row keeps its original recorded features and timestamp. These examples can have different contexts, so this is an inference preview rather than a live candidate-ranking evaluation.</p></details><p class="model-boundary-note">These scores belong to KuaiRand item IDs, not to the stock clips in your scrolling feed. This panel does not evaluate held-out data or retrain the model.</p></div>`;
+}
+async function openModelPreview() {
+  const generation = showModal('Meet the model.', '<div class="modal-body"><div class="model-loading"><span class="model-loading-dot"></span><p>Connecting to the saved DeepFM model…</p></div><p class="model-boundary-note">The video feed stays available independently of this connection.</p></div>', 'DEEPFM · PREDICTION PREVIEW');
+  modal.classList.add('model-modal');
+  try {
+    const preview = await fetchModelPreview();
+    if (!previewIsCurrent(generation)) return;
+    if (preview.status.state !== 'ready') return showModelUnavailable(preview.status.message || 'The inference worker could not load the local model.', generation);
+    modelPreview = preview;
+    updateModelIndicator(true);
+    renderModelPanel(generation);
+  } catch (error) {
+    showModelUnavailable(error.message || 'Unable to reach the local inference service.', generation);
+  }
+}
+async function scoreModelProfile() {
+  const generation = modalGeneration;
+  const profileId = $('#model-profile')?.value;
+  if (!profileId || !previewIsCurrent(generation)) return;
+  selectedProfileId = profileId;
+  const button = $('#model-score-button');
+  const select = $('#model-profile');
+  button.disabled = true; select.disabled = true;
+  $('#model-score-results').innerHTML = '<div class="model-loading"><span class="model-loading-dot"></span><p>Running DeepFM on the recorded examples…</p></div>';
+  try {
+    const result = await fetchModelScores(profileId);
+    if (!previewIsCurrent(generation)) return;
+    if (result.checkpoint_sha256 !== modelPreview.status.checkpoint_sha256) throw new Error('The loaded checkpoint changed. Reopen the model preview before scoring again.');
+    if (result.examples.length !== modelPreview.profiles.find(profile => profile.id === profileId)?.example_count) throw new Error('The model returned an incomplete set of examples. Reopen the preview before scoring again.');
+    const dateFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false });
+    $('#model-score-results').innerHTML = `<div class="prediction-summary"><strong>${result.examples.length} model predictions</strong><span>Sorted by click estimate</span></div><div class="prediction-table-wrap"><table class="prediction-table"><caption class="visually-hidden">DeepFM scores for recorded training examples, ordered by predicted click likelihood</caption><thead><tr><th scope="col">Item</th><th scope="col">Recorded (UTC)</th><th scope="col">Click estimate</th></tr></thead><tbody>${result.examples.map(example => `<tr><th scope="row"><span class="prediction-rank">${example.rank}</span> Video ${escape(example.video_id)}</th><td>${escape(dateFormat.format(new Date(example.recorded_at_ms)))}</td><td><span class="prediction-value">${(example.probability * 100).toFixed(1)}%</span><span class="prediction-bar" aria-hidden="true"><span style="width:${(example.probability * 100).toFixed(1)}%"></span></span></td></tr>`).join('')}</tbody></table></div><p class="prediction-caveat">These are in-sample historical predictions, not an accuracy measurement or calibrated guarantee of a click.</p>`;
+  } catch (error) {
+    if (!previewIsCurrent(generation)) return;
+    updateModelIndicator(false);
+    $('#model-score-results').innerHTML = `<div class="model-notice model-error" role="alert"><strong>Prediction couldn’t finish.</strong><p>${escape(error.message || 'The inference service is unavailable. Try again.')}</p></div>`;
+  } finally {
+    if (previewIsCurrent(generation)) { button.disabled = false; select.disabled = false; }
+  }
 }
 function showInterests() {
   showModal('What catches your eye?', `<p>Choose a few things you love. Your demo mix starts with these interests.</p><form id="interests-form"><div class="modal-interest-grid">${categories.filter(name => name !== 'All').map(name => `<label class="interest-option"><input type="checkbox" name="interest" value="${name}" ${state.preferences.includes(name) ? 'checked' : ''}> ${name}</label>`).join('')}</div><label class="interest-option"><input type="checkbox" name="reduced" ${state.reducedMotion ? 'checked' : ''}> Pause automatic video playback</label><button class="primary-button" type="submit">Make it my mix ${icon('sparkles')}</button></form>`);
@@ -221,8 +283,10 @@ document.addEventListener('click', async event => {
   const button = event.target.closest('[data-action]');
   if (!button) return;
   const action = button.dataset.action, post = posts.find(item => item.id === button.dataset.id);
+  if (action === 'deepfm') return openModelPreview();
+  if (action === 'deepfm-score') return scoreModelProfile();
   if (action === 'interests' || action === 'profile') return showInterests();
-  if (action === 'about') return showModal('Welcome to Loop.', '<p>A space for your curiosity. Scroll through short films, follow a fresh perspective, and keep the moments you love.</p><p><strong>This is the first product preview.</strong> The clips are credited stock footage, and creators, comments and counts are sample content. Your interests shape a simple demo feed.</p><p>The project’s trained DeepFM recommendation model is not connected to this feed yet. Your likes, saves and follows stay in this browser.</p><p class="modal-note">Checkpoint 1 · Layout and browsing preview. We’re shaping the product together, one step at a time.</p>');
+  if (action === 'about') return showModal('Welcome to Loop.', '<p>A space for your curiosity. Scroll through short films, follow a fresh perspective, and keep the moments you love.</p><p>The clips are credited stock footage, and creators, comments and counts are sample content. Your interests shape this demo feed; your likes, saves and follows stay in this browser.</p><p><strong>Try DeepFM</strong> in the header opens the project’s saved model and scores separate historical KuaiRand examples. Those item IDs are not mapped to the stock clips, so model scores do not reorder this feed.</p><p class="modal-note">Checkpoint 2 · A real model prediction preview alongside the demo feed. We’re shaping the product together, one step at a time.</p>');
   if (action === 'shortcuts') return showModal('A shortcut to good things.', '<div class="shortcut-line">Next / previous video <span><kbd>↓</kbd> <kbd>↑</kbd></span></div><div class="shortcut-line">Play / pause <kbd>Space</kbd></div><div class="shortcut-line">Like this video <kbd>L</kbd></div><div class="shortcut-line">Save this video <kbd>S</kbd></div><div class="shortcut-line">Mute / unmute <kbd>M</kbd></div><div class="shortcut-line">Search <kbd>/</kbd></div><div class="shortcut-line">Close dialog <kbd>Esc</kbd></div>');
   if (action === 'reset') return changeView('for-you');
   if (action === 'scenic') { view = 'discover'; category = 'Travel'; query = ''; $('#search').value = ''; updateNav(); renderFeed(); return; }
@@ -269,6 +333,11 @@ feed.addEventListener('input', event => {
 });
 $('#search').addEventListener('input', event => { query = event.target.value.slice(0, 100); mixOffset = 0; renderFeed(); });
 $('#close-modal').addEventListener('click', () => modal.close());
+modal.addEventListener('change', event => {
+  if (event.target.id !== 'model-profile') return;
+  selectedProfileId = event.target.value;
+  $('#model-score-results').innerHTML = `<div class="model-result-placeholder">${icon('sparkles')}<p>Run a prediction to score this recorded profile.</p></div>`;
+});
 modal.addEventListener('click', event => { if (event.target === modal) { const bounds = modal.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) modal.close(); } });
 modal.addEventListener('close', () => playActive());
 document.addEventListener('submit', event => {
