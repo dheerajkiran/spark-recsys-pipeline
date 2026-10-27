@@ -208,7 +208,7 @@ All host ports bind to `127.0.0.1`. HDFS and Spark run without authentication he
 | `namenode` | Hadoop 3.3.6 (own build) | HDFS metadata | 1 GB | 9870 (UI), 9000 (RPC) |
 | `datanode-1`, `datanode-2` | Hadoop 3.3.6 (own build) | HDFS block storage | 1 GB each | 9864, 9865 (UI) |
 | `spark-master` | Spark 3.5.9 | Cluster manager; also runs the driver of jobs submitted from it | 1.5 GB | 8080 (UI), 7077 (RPC), 4040 (app UI) |
-| `spark-worker-1..3` | Spark 3.5.9 | One executor each (2 cores, 1 GB heap) | 2 cores, 2 GB each | 8081–8083 (UI) |
+| `spark-worker-1..3` | Spark 3.5.9 | One executor each (2 cores, 1 GB heap) | 2 cores, 2.5 GB each (worker + executor peaked at about 2.0 GiB on KuaiRand-1K) | 8081–8083 (UI) |
 | `spark-history` | Spark 3.5.9 | History Server for finished jobs | 512 MB | 18080 (UI) |
 
 **Data locality caveat:** Spark workers and DataNodes run in separate containers, so executors never find a block on their own "node" and every HDFS read crosses the Docker network. On one laptop this costs little, since the network is virtual. Co-locating a DataNode and a worker in one container is a possible later experiment.
@@ -222,6 +222,7 @@ All host ports bind to `127.0.0.1`. HDFS and Spark run without authentication he
 | `spark.sql.shuffle.partitions` | `24` initially | Default of 200 is too many for 6 cores; AQE coalesces further |
 | `spark.sql.autoBroadcastJoinThreshold` | `10MB` (default) | Small tables broadcast automatically; we also broadcast explicitly where needed |
 | `spark.serializer` | `KryoSerializer` | Faster and more compact than Java serialization |
+| `spark.sql.windowExec.buffer.in.memory.threshold` | `131072` (default 4096) | Window functions buffer a user's whole history. Past the threshold they spill in many small files, and reading them back opens each with a 1 MB heap buffer; KuaiRand-1K's largest user (127K events) ran executors out of heap. Changes memory use only, not results |
 | `spark.eventLog.enabled` | `true` | Needed for the History Server and benchmark evidence |
 | `dfs.replication` (HDFS) | `2` | Matches the number of DataNodes. Also set as `spark.hadoop.dfs.replication`, because Spark's HDFS client does not read the cluster's `hdfs-site.xml` and would otherwise write files with 3 replicas |
 
@@ -241,6 +242,8 @@ hdfs:///
 └── gold/_metadata/                # feature_spec.json, scaling_stats.json, vocab/<name>/,
                                    # vocab_sizes.json, run_stats/<stage>.json
 ```
+
+KuaiRand-1K (`config/pipeline-1k.yaml`) writes the same layers under `/1k/` (`/1k/bronze`, …, `/1k/gold`), so Pure and 1K live side by side; raw files are under `raw/kuairand/<version>/`.
 
 ---
 
@@ -340,9 +343,10 @@ The rules were set after profiling the raw data (`scripts/profile_raw.py`). Coun
 | Drop rows with null `user_id`, `video_id` or `time_ms` | None found; kept as a guard | 0 removed |
 | Collapse duplicate events (same `user_id`, `video_id`, `time_ms`) into one row, taking the **max** of each outcome column | 1.6% of standard-log events are logged 2–6 times. Copies differ mostly in the coarse hour; about 20 later copies carry more engagement (e.g. a click), so the max keeps the most complete record | 23,483 removed |
 | Drop rows with negative `play_time_ms` or `duration_ms` | None found; kept as a guard | 0 removed |
+| Drop impressions of videos with no `upload_dt` | Video age is undefined without it. None in Pure; 58 videos in KuaiRand-1K (183 of 11.76M events) | 0 removed |
 | Treat `duration_ms = 0` as **unknown (null)** and keep the row | 237 videos have no recorded length anywhere (log or video table), but their impressions are real: 82% have play time, 23% are clicked. Dropping them would remove 2% of data and bias against those videos | 65,779 changed |
 | Cap `play_time_ms` at 5× `duration_ms` | Watch-ratio p99.9 is 4.94, max 68 (looping videos) | 1,923 changed |
-| Drop **bot-like user-days**: ≥ 20 events with a median gap under 2 s, or more than 16 h of play | The originally planned rule (users above the 99.9th percentile of daily events) would have removed 5.4% of rows. The heaviest user-days (up to 237 events) are fast scrollers with 15 s+ median gaps and under 1 h of play, not bots | 0 removed |
+| Drop **bot-like user-days**: ≥ 20 feed requests (distinct timestamps) with a median gap under 2 s between them, or more than 16 h of play | The originally planned rule (users above the 99.9th percentile of daily events) would have removed 5.4% of rows. The heaviest user-days (up to 237 events) are fast scrollers with 15 s+ median gaps and under 1 h of play, not bots. Gaps are measured between requests because a request's videos share one timestamp: KuaiRand-1K serves ~6 per request, so 83% of event gaps are 0 s and a per-event rule flagged 99.7% of its rows | 0 removed |
 | Dimension tables: missing strings → `UNKNOWN`, missing integer codes → `-1`, `tag` → `tags` (array of ints) | Nulls in 7 `onehot_feat` columns, `music_type`, `tag`; `tag` holds lists like `"12,60"` | No rows removed |
 
 Every rule logs how many rows it removed or changed (`gold/_metadata/run_stats/clean.json`), so over-aggressive cleaning is visible. In total, cleaning removed **0.90%** of interactions.
@@ -598,7 +602,7 @@ So the default is **broadcast**. Pure timings for the stage: broadcast 12 s, sor
 For the phase 6 benchmark to show a real effect, it needs partitions that are actually skewed: broadcast disabled, plus a larger dataset (1K or a slice of 27K) or more shuffle partitions so that hot keys dominate their partition. We record the stage time and the max/median task duration from the Spark UI.
 
 ### Broadcast joins
-Small tables (user and video features, `item_daily` in Pure, vocabularies, per-date global click rates) are broadcast to every executor with `F.broadcast(...)`, so the large event table is not shuffled for those joins.
+Small tables (user and video features, `item_daily` in Pure, vocabularies, per-date global click rates) are broadcast to every executor with `F.broadcast(...)`, so the large event table is not shuffled for those joins. In KuaiRand-1K, `video_static` (4.4M videos) and `item_daily` (67 MB of Parquet) are too large to broadcast from the 768 MB driver, so its config shuffle-joins both (`join.broadcast_video_static: false`, `join.item_daily_strategy: sortmerge`).
 
 ### Caching
 DataFrames reused by several feature builders (the cleaned interaction table) are `persist()`-ed and `unpersist()`-ed when no longer needed, to avoid recomputing them from HDFS.
@@ -631,6 +635,24 @@ Rules:
 - The first run after cluster start is discarded (warm-up).
 - Results are saved as CSVs in `benchmarks/results/` and plotted with matplotlib.
 - Because everything runs on one laptop, scaling results show the effect of parallelism, not true multi-machine network cost. This limitation is stated alongside the results.
+
+### Harness
+
+`benchmarks/common.py` runs a job (usually a `spark-submit` on the cluster) warm-up + N times and times each run end to end. A run's Spark applications are the ones the master lists as newly completed, so the cluster must be otherwise idle (the harness refuses to start if another app is running). For each application it reads stage times, task counts, max and median task time (Spark's nearest-rank quantiles) and input/shuffle bytes from the History Server REST API. Results go to `benchmarks/results/<benchmark>_{runs,stages,summary}.csv`; every run row carries the variant's full config and its hash, so like-for-like comparisons can be checked. `benchmarks/dummy_job.py` is a small cluster job for testing the harness.
+
+### Benchmark dataset: KuaiRand-1K
+
+Pure is too small to show scaling or skew effects, so the benchmarks use KuaiRand-1K: 1.1 GB compressed, 4.3 GB of CSVs (3.1 GB of it the unused video statistics file). It has 1,000 heavy users instead of 27,285, which changed several assumptions that held for Pure. Each was measured, and `config/pipeline-1k.yaml` overrides only these keys of `pipeline.yaml`:
+
+| | Pure | 1K | Change |
+|---|---|---|---|
+| Events (standard + random) | 2.6M | 11.76M | — |
+| Largest user | 1,765 events | 127,001 events | Window buffer threshold (section 6) and 2.5 GB workers |
+| Videos per feed request (median / max) | 1 / 6 | 6 / 20 after cleaning | Bot rule counts requests; `features.history_tie_slack: 20` (Pure 10) |
+| First standard-log date | 2022-04-09 | 2022-04-07 | `split.train` starts 2022-04-07; val and test dates unchanged |
+| `video_static` / `item_daily` | 172 KB / 3 MB | 61 MB / 67 MB | Shuffle joins instead of broadcast |
+
+The full 1K pipeline passes every quality check. Cleaning removed 0.86% of events (101,221 duplicates, 183 without upload date; no bot user-days). Gold: train 7,913,346, val 1,724,872, test 1,973,424 and test_random 19,684 rows; click rate 38% on the standard log and 18% on the random log. Single-run stage times: ingest 76 s, clean 56 s, features 145 s, build_dataset 225 s. Benchmark timings will come from the harness, not from these runs.
 
 ---
 
@@ -678,7 +700,8 @@ spark-recsys-pipeline/
 ├── docker-compose.yml        # HDFS + Spark cluster
 ├── docker/                   # Dockerfiles and Hadoop/Spark config files
 ├── config/
-│   └── pipeline.yaml         # paths, thresholds, label, seeds
+│   ├── pipeline.yaml         # paths, thresholds, label, seeds
+│   └── pipeline-1k.yaml      # KuaiRand-1K overrides (extends pipeline.yaml)
 ├── scripts/
 │   ├── download_data.sh      # fetch KuaiRand / KuaiRec
 │   ├── load_to_hdfs.sh       # hdfs dfs -put raw files
@@ -700,10 +723,10 @@ spark-recsys-pipeline/
 │   ├── models.py             # DeepFM, LR baseline
 │   └── train_deepfm.py       # training loop and evaluation
 ├── benchmarks/
-│   ├── pandas_baseline.py
-│   ├── scaling.py
-│   ├── skew.py
-│   └── results/              # CSVs and plots
+│   ├── common.py             # harness: repeated runs, History Server metrics, CSVs
+│   ├── dummy_job.py          # small cluster job for harness tests
+│   ├── tests/                # harness tests (host Python)
+│   └── results/              # CSVs and plots (scaling, skew, pandas: planned)
 ├── tests/                    # pytest unit tests for transformations
 └── README.md
 ```
@@ -712,7 +735,7 @@ spark-recsys-pipeline/
 
 ## 17. Running locally
 
-**Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, [uv](https://docs.astral.sh/uv/) for the training environment, and about 20 GB of free disk. The pipeline and its tests run inside the cluster, so they need no local Python setup.
+**Requirements:** Docker (OrbStack or Docker Desktop) with about 11 GB of memory allocated, [uv](https://docs.astral.sh/uv/) for the training environment, and about 20 GB of free disk (about 21 GB more for the optional KuaiRand-1K benchmark data: 5.4 GB of local files plus 15 GB on HDFS with 2 replicas). The pipeline and its tests run inside the cluster, so they need no local Python setup.
 
 All steps below work today. Once gold is exported, training runs on the host
 without starting the containers. Full LR/DeepFM results are in section 18.
@@ -751,9 +774,15 @@ uv pip install --python .venv -r requirements-train.txt
 #    Test results are reporting-only; use validation for tuning.
 
 # 6. Run tests: pipeline tests inside the spark-master container,
-#    training tests in the host venv
+#    training and benchmark-harness tests in the host venv (the harness's
+#    real-cluster test is skipped when the cluster is not running)
 ./scripts/run_tests.sh
-.venv/bin/python -m pytest training/tests
+.venv/bin/python -m pytest training/tests benchmarks/tests
+
+# 7. Optional, for the benchmarks: KuaiRand-1K through the same pipeline into /1k/...
+./scripts/download_data.sh 1k
+./scripts/load_to_hdfs.sh 1k
+PIPELINE_CONFIG=config/pipeline-1k.yaml ./scripts/run_pipeline.sh
 ```
 
 Web UIs:

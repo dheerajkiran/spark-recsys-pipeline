@@ -79,7 +79,7 @@ class RunStats:
 
     def record(self, key: str, value) -> None:
         self.stats[key] = value
-        print(f"[{self.stage}] {key}: {value:,}" if isinstance(value, int)
+        print(f"[{self.stage}] {key}: {value:,}" if isinstance(value, int) and not isinstance(value, bool)
               else f"[{self.stage}] {key}: {value}")
 
     def save(self, spark: SparkSession) -> None:

@@ -15,6 +15,10 @@ is executed is set by join.item_daily_strategy in config/pipeline.yaml:
 
 All three give identical rows (tests/test_build_dataset.py).
 
+user_static is always broadcast. video_static is broadcast unless
+join.broadcast_video_static is false: KuaiRand-1K has 4.4M videos, too many to
+broadcast from a 768 MB driver, so it uses a shuffle join instead.
+
 Numerics are then filled and scaled with statistics from training rows only
 (standard log, training dates): heavy-tailed counts get log1p, every numeric
 is standardized, and nulls ("no information yet") become the training mean,
@@ -138,12 +142,13 @@ def join_item_daily(events: DataFrame, item_daily: DataFrame, strategy: str,
 
 def join_features(events: DataFrame, user_static: DataFrame, video_static: DataFrame,
                   item_daily: DataFrame, author_daily: DataFrame, strategy: str,
-                  salt_buckets: int) -> DataFrame:
+                  salt_buckets: int, broadcast_videos: bool = True) -> DataFrame:
     """One row per event with every feature attached. Left joins, so a missing
     match shows up as nulls (caught by the match checks), never as lost rows."""
+    videos = F.broadcast(video_static) if broadcast_videos else video_static.hint("merge")
     joined = (events
               .join(F.broadcast(user_static), "user_id", "left")
-              .join(F.broadcast(video_static), "video_id", "left"))
+              .join(videos, "video_id", "left"))
     joined = join_item_daily(joined, item_daily, strategy, salt_buckets)
     return joined.join(author_daily, ["author_id", "event_date"], "left")
 
@@ -269,7 +274,9 @@ def main() -> None:
     stats = RunStats("build_dataset", cfg)
     feat = cfg["paths"]["features"]
     strategy, salt_buckets = cfg["join"]["item_daily_strategy"], cfg["join"]["salt_buckets"]
+    broadcast_videos = cfg["join"]["broadcast_video_static"]
     stats.record("item_daily_strategy", strategy)
+    stats.record("broadcast_video_static", broadcast_videos)
 
     events = spark.read.parquet(f"{feat}/events")
     n_events = events.count()
@@ -280,7 +287,7 @@ def main() -> None:
         spark.read.parquet(f"{feat}/video_static"),
         spark.read.parquet(f"{feat}/item_daily"),
         spark.read.parquet(f"{feat}/author_daily"),
-        strategy, salt_buckets,
+        strategy, salt_buckets, broadcast_videos,
     ).cache()
     check_joined(joined, n_events, stats)
     stats.record("joined_columns", len(joined.columns))
