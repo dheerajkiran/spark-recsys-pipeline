@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#faf9f6">
+  <meta name="description" content="A little curiosity, a new perspective. Discover your next favorite moment with Loop.">
+  <title>Loop — A little more you.</title>
+  <link rel="icon" href="./assets/loop.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#feed">Skip to videos</a>
+  <aside class="sidebar" aria-label="Main navigation">
+    <a class="brand" href="#for-you" data-view="for-you" aria-label="Loop home"><img src="./assets/loop.svg" alt="" width="35" height="35"><span>loop<span class="brand-dot">.</span></span></a>
+    <p class="brand-note">Stay a little curious.</p>
+    <nav class="primary-nav" aria-label="Browse">
+      <button class="nav-link active" data-view="for-you"><span data-icon="home"></span><span>For you</span><span class="nav-indicator"></span></button>
+      <button class="nav-link" data-view="following"><span data-icon="users"></span><span>Following</span></button>
+      <button class="nav-link" data-view="discover"><span data-icon="compass"></span><span>Explore</span><span class="new-label">NEW</span></button>
+    </nav>
+    <div class="nav-divider"></div>
+    <p class="sidebar-label">YOUR SPACE</p>
+    <nav class="space-nav" aria-label="Your library">
+      <button class="nav-link" data-view="saved"><span data-icon="bookmark"></span><span>Saved moments</span><span id="saved-count" class="nav-count">0</span></button>
+      <button class="nav-link" data-view="liked"><span data-icon="heart"></span><span>Liked videos</span></button>
+    </nav>
+    <div class="sidebar-tip"><span class="tip-mark" data-icon="sparkles"></span><p>A feed that feels like <em>you.</em></p><span>Choose what you love.<br>Find a little more of it.</span><button data-action="interests">Make it yours <span aria-hidden="true">↗</span></button></div>
+    <div class="sidebar-bottom">
+      <button class="demo-status" data-action="about"><span></span>Interactive preview<span data-icon="info"></span></button>
+      <button class="profile" data-action="profile"><span class="avatar user-avatar">YO</span><span><strong>Your space</strong><small>A little corner of the internet</small></span><span data-icon="chevrons"></span></button>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar">
+      <div class="heading"><span class="eyebrow">LESS NOISE. MORE DISCOVERY.</span><h1>A little more you<span>.</span></h1></div>
+      <div class="header-tools"><button class="model-launch" data-action="deepfm" aria-label="Open DeepFM preview"><span class="model-indicator"></span><span class="model-launch-label">Try DeepFM</span><span data-icon="sparkles"></span></button><label class="search-box"><span data-icon="search"></span><input id="search" type="search" placeholder="Find your next rabbit hole…" aria-label="Search videos" autocomplete="off"><kbd>/</kbd></label><button class="icon-button preferences-trigger" data-action="interests" aria-label="Edit your interests"><span data-icon="sliders"></span></button></div>
+    </header>
+
+    <main class="main-layout">
+      <section class="feed-column" aria-label="Video discovery">
+        <div class="feed-topline"><nav class="feed-tabs" aria-label="Feed type"><button data-view="for-you" class="active">For you</button><button data-view="following">Following</button><button data-view="discover">Explore</button></nav><button class="refresh-mix" data-action="refresh" aria-label="Refresh your mix"><span data-icon="refresh"></span><span>Fresh mix</span></button></div>
+        <div id="categories" class="categories" aria-label="Filter videos by topic"></div>
+        <div class="feed-context"><span id="feed-label"><span class="tiny-star">✦</span> A few things we think you'll love</span><span id="position-label">01 / 08</span></div>
+        <div id="feed" class="feed-scroll" tabindex="0" aria-label="Video feed — use up and down arrows to browse"></div>
+        <div class="feed-footer"><span><span class="keycap">↑</span><span class="keycap">↓</span> to explore</span><span>Take a scroll. Find your thing.</span><button data-action="shortcuts" aria-label="Show keyboard shortcuts"><span data-icon="keyboard"></span></button></div>
+      </section>
+
+      <aside class="discovery" aria-label="Discover more">
+        <div class="daily-heading"><span class="eyebrow">THE GOOD STUFF</span><span class="small-sun" data-icon="sun"></span></div>
+        <h2>Out of your routine.<br>Into your next favorite.</h2>
+        <button class="discovery-feature" id="discovery-feature" data-action="scenic"><img id="feature-image" alt="Discover a new landscape"><span class="feature-shade"></span><span class="feature-kicker">A CHANGE OF SCENERY</span><strong>Take the scenic route.</strong><span class="feature-arrow" data-icon="arrow-up-right"></span></button>
+        <section class="interest-section"><div class="section-title"><h3>Your kind of things</h3><button class="small-icon" data-action="interests" aria-label="Customize interests"><span data-icon="sliders"></span></button></div><div id="interest-chips" class="interest-chips"></div><p>Little signals. Better discoveries.</p></section>
+        <section class="creators-section"><div class="section-title"><h3>People to get curious about</h3><span data-icon="users"></span></div><div id="creator-list"></div></section>
+        <section class="collection-section"><div class="section-title"><h3>A moment for yourself</h3><span class="tiny-star">✦</span></div><div id="collection-grid" class="collection-grid"></div></section>
+        <footer class="discovery-footer"><button data-action="about">About Loop</button><span>·</span><button data-action="shortcuts">Keyboard shortcuts</button><p>Made for the moments in between. <span>© 2026 Loop</span></p></footer>
+      </aside>
+    </main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="Mobile navigation"><button data-view="for-you" class="active" aria-label="For you"><span data-icon="home"></span><small>For you</small></button><button data-view="discover" aria-label="Explore"><span data-icon="compass"></span><small>Explore</small></button><button data-view="following" aria-label="Following"><span data-icon="users"></span><small>Following</small></button><button data-view="saved" aria-label="Saved moments"><span data-icon="bookmark"></span><small>Saved</small></button><button data-action="interests" aria-label="Your interests"><span class="mini-avatar">YO</span><small>You</small></button></nav>
+  <dialog id="modal" aria-labelledby="modal-title"><div class="modal-heading"><div><span class="eyebrow" id="modal-eyebrow">A LITTLE MORE YOU</span><h2 id="modal-title"></h2></div><button class="icon-button" id="close-modal" aria-label="Close dialog"><span data-icon="close"></span></button></div><div id="modal-content"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="noscript">Please enable JavaScript to explore the video feed.</p></noscript>
+</body>
+</html>

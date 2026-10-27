@@ -1,0 +1,14 @@
+{
+  "name": "loop-feed-preview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive, local-first short-video feed for the Spark recommendation project.",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check app.js && node --check feed-state.js && node --check model-preview.js && node --check deepfm-client.mjs && node --check server.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
