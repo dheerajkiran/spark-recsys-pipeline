@@ -3,6 +3,7 @@
 #
 # Usage: ./scripts/run_pipeline.sh [stage ...]   (default: all stages)
 #   e.g. ./scripts/run_pipeline.sh clean
+# PIPELINE_CONFIG picks another config (repo-relative), e.g. config/pipeline-1k.yaml.
 #
 # Each stage reads one layer and writes the next, so any stage can be re-run
 # on its own. A failed quality check stops the run.
@@ -19,6 +20,7 @@ docker exec namenode hdfs dfsadmin -safemode wait >/dev/null
 for stage in "$@"; do
   echo "=== $stage ==="
   start=$(date +%s)
-  docker exec spark-master spark-submit "/opt/project/pipeline/$stage.py"
+  docker exec spark-master spark-submit "/opt/project/pipeline/$stage.py" \
+    --config "/opt/project/${PIPELINE_CONFIG:-config/pipeline.yaml}"
   echo "=== $stage done in $(( $(date +%s) - start ))s ==="
 done

@@ -1,0 +1,15 @@
+# KuaiRand-1K run (Phase 6 benchmarks). Only the keys below differ from
+# pipeline.yaml; its layers live under /1k so Pure's stay untouched.
+# Run with: PIPELINE_CONFIG=config/pipeline-1k.yaml ./scripts/run_pipeline.sh
+
+extends: pipeline.yaml
+
+dataset:
+  version: 1k
+
+paths:
+  bronze: hdfs:///1k/bronze
+  silver: hdfs:///1k/silver
+  features: hdfs:///1k/features
+  gold: hdfs:///1k/gold
+  metadata: hdfs:///1k/gold/_metadata
