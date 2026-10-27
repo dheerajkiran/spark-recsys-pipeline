@@ -257,7 +257,7 @@ def test_backfill_adds_sources_and_removes_items_without_a_safari_derivative(tmp
     report = importer.backfill_sources(db, client=client)
     assert client.params[0]["pageids"] == "1|2|3"
     assert report["checked"] == 3 and report["updated"] == 1 and report["removed"] == 2
-    assert report["remove_reasons"] == {"no_safari_derivative": 1, "missing_video_info": 1}
+    assert report["remove_reasons"] == {"no_safari_derivative": 1, "missing_file": 1}
     [kept] = rows(db)
     assert kept["id"] == "commons:1" and kept["sources"][0] == {"src": mov_url(1), "type": MOV_TYPE}
     before = revision(db)
@@ -274,6 +274,27 @@ def test_backfill_changes_nothing_when_a_page_is_omitted_or_on_dry_run(tmp_path)
     assert dry["updated"] == 2
     assert hashlib.sha256(db.read_bytes()).hexdigest() == digest
     assert all("sources" not in row for row in rows(db))
+
+
+@pytest.mark.parametrize("malformed", [
+    {"pageid": 2},
+    {"pageid": 2, "videoinfo": []},
+    {"pageid": 2, "videoinfo": ["oops"]},
+    {"pageid": 2, "videoinfo": [{"duration": 21.5}]},
+    {"pageid": 2, "videoinfo": [{"derivatives": "oops"}]},
+    {"pageid": 2, "videoinfo": [{"derivatives": ["malformed"]}]},
+    {"pageid": 2, "videoinfo": [{"derivatives": [{"src": "https://upload.wikimedia.org/x.mov"}]}]},
+    {"pageid": 2, "videoinfo": [{"derivatives": [{"src": 1, "type": "video/webm", "width": 640, "height": 360}]}]},
+    {"pageid": 2, "videoinfo": [{"derivatives": [{"src": "https://upload.wikimedia.org/x.webm", "type": "video/webm", "width": "640", "height": 360}]}]},
+    {"pageid": 2, "missing": "yes"},
+])
+def test_backfill_aborts_without_deleting_on_malformed_metadata(tmp_path, malformed):
+    db = legacy_catalog(tmp_path, [1, 2])
+    digest = hashlib.sha256(db.read_bytes()).hexdigest()
+    with pytest.raises(importer.SourceError):
+        importer.backfill_sources(db, client=FakeClient([lookup(page(1), malformed)]))
+    assert hashlib.sha256(db.read_bytes()).hexdigest() == digest
+    assert [row["id"] for row in rows(db)] == ["commons:1", "commons:2"]
 
 
 def test_backfill_reads_pages_in_bounded_batches(tmp_path):

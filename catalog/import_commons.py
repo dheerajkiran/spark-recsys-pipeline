@@ -507,10 +507,20 @@ def backfill_sources(db_path=ROOT / "data/catalog/catalog.sqlite", *, max_reques
                 page = by_id.get(source_id)
                 if page is None:
                     raise SourceError("Commons API omitted a requested page; nothing was changed")
+                # Remove only confirmed-missing files or well-formed metadata
+                # without a compatible source; anything malformed aborts.
+                if page.get("missing") is True:
+                    reasons["missing_file"] += 1
+                    removals.append(item_id)
+                    continue
                 revisions = page.get("videoinfo")
+                derivatives = revisions[0].get("derivatives") if isinstance(revisions, list) and revisions and isinstance(revisions[0], dict) else None
+                if not isinstance(derivatives, list) or not all(
+                        isinstance(item, dict) and isinstance(item.get("src"), str) and isinstance(item.get("type"), str)
+                        and type(item.get("width")) is int and type(item.get("height")) is int
+                        for item in derivatives):
+                    raise SourceError("Commons API returned invalid video metadata; nothing was changed")
                 try:
-                    if page.get("missing") or not isinstance(revisions, list) or not revisions or not isinstance(revisions[0], dict):
-                        raise SkipVideo("missing_video_info")
                     video, media_type, sources = select_sources(revisions[0])
                 except SkipVideo as error:
                     reasons[str(error)] += 1
