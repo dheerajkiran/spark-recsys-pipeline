@@ -2,7 +2,8 @@
 
 This checkpoint connects the local UI to the frozen DeepFM model. DeepFM is a
 ranking model; HDFS/Parquet provide the data, and the Node server exposes a small
-read-only inference API. There is no application database in this checkpoint.
+read-only inference API. The worker is independent of the playable catalog's
+SQLite metadata database, documented in [the catalog guide](../catalog/README.md).
 
 Run `npm run dev` from `frontend/`, then open **Try DeepFM**. Node spawns
 `.venv/bin/python serving/preview.py` lazily and communicates using JSON lines.

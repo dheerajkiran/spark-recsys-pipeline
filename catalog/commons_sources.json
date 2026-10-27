@@ -1,0 +1,372 @@
+{
+  "version": 1,
+  "provider": "wikimedia",
+  "api": "https://commons.wikimedia.org/w/api.php",
+  "documentation": [
+    "https://www.mediawiki.org/wiki/Extension:TimedMediaHandler/API",
+    "https://www.mediawiki.org/wiki/API:Etiquette",
+    "https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia"
+  ],
+  "queries": [
+    {
+      "category": "Nature",
+      "query": "forest"
+    },
+    {
+      "category": "Travel",
+      "query": "mountain"
+    },
+    {
+      "category": "Food",
+      "query": "cooking"
+    },
+    {
+      "category": "Design",
+      "query": "pottery"
+    },
+    {
+      "category": "Science",
+      "query": "experiment"
+    },
+    {
+      "category": "Nature",
+      "query": "river"
+    },
+    {
+      "category": "Travel",
+      "query": "city"
+    },
+    {
+      "category": "Food",
+      "query": "coffee"
+    },
+    {
+      "category": "Design",
+      "query": "drawing"
+    },
+    {
+      "category": "Science",
+      "query": "microscope"
+    },
+    {
+      "category": "Nature",
+      "query": "ocean"
+    },
+    {
+      "category": "Travel",
+      "query": "train"
+    },
+    {
+      "category": "Food",
+      "query": "bread"
+    },
+    {
+      "category": "Design",
+      "query": "painting"
+    },
+    {
+      "category": "Science",
+      "query": "astronomy"
+    },
+    {
+      "category": "Nature",
+      "query": "waterfall"
+    },
+    {
+      "category": "Travel",
+      "query": "beach"
+    },
+    {
+      "category": "Food",
+      "query": "fruit"
+    },
+    {
+      "category": "Design",
+      "query": "animation"
+    },
+    {
+      "category": "Science",
+      "query": "space"
+    },
+    {
+      "category": "Nature",
+      "query": "birds"
+    },
+    {
+      "category": "Travel",
+      "query": "landscape"
+    },
+    {
+      "category": "Food",
+      "query": "food"
+    },
+    {
+      "category": "Design",
+      "query": "architecture"
+    },
+    {
+      "category": "Science",
+      "query": "robot"
+    },
+    {
+      "category": "Nature",
+      "query": "butterfly"
+    },
+    {
+      "category": "Nature",
+      "query": "flowers"
+    },
+    {
+      "category": "Nature",
+      "query": "wildlife"
+    },
+    {
+      "category": "Nature",
+      "query": "clouds"
+    },
+    {
+      "category": "Travel",
+      "query": "tram"
+    },
+    {
+      "category": "Food",
+      "query": "tea"
+    },
+    {
+      "category": "Design",
+      "query": "sculpture"
+    },
+    {
+      "category": "Science",
+      "query": "NASA"
+    },
+    {
+      "category": "Nature",
+      "query": "rain"
+    },
+    {
+      "category": "Travel",
+      "query": "railway"
+    },
+    {
+      "category": "Food",
+      "query": "baking"
+    },
+    {
+      "category": "Design",
+      "query": "ceramics"
+    },
+    {
+      "category": "Science",
+      "query": "earth"
+    },
+    {
+      "category": "Nature",
+      "query": "snow"
+    },
+    {
+      "category": "Travel",
+      "query": "street"
+    },
+    {
+      "category": "Food",
+      "query": "chocolate"
+    },
+    {
+      "category": "Design",
+      "query": "woodworking"
+    },
+    {
+      "category": "Science",
+      "query": "planet"
+    },
+    {
+      "category": "Nature",
+      "query": "bees"
+    },
+    {
+      "category": "Travel",
+      "query": "bridge"
+    },
+    {
+      "category": "Food",
+      "query": "cheese"
+    },
+    {
+      "category": "Design",
+      "query": "origami"
+    },
+    {
+      "category": "Science",
+      "query": "moon"
+    },
+    {
+      "category": "Nature",
+      "query": "fish"
+    },
+    {
+      "category": "Travel",
+      "query": "airport"
+    },
+    {
+      "category": "Food",
+      "query": "vegetable"
+    },
+    {
+      "category": "Design",
+      "query": "calligraphy"
+    },
+    {
+      "category": "Science",
+      "query": "solar"
+    },
+    {
+      "category": "Nature",
+      "query": "turtle"
+    },
+    {
+      "category": "Travel",
+      "query": "countryside"
+    },
+    {
+      "category": "Food",
+      "query": "pasta"
+    },
+    {
+      "category": "Design",
+      "query": "stop motion"
+    },
+    {
+      "category": "Science",
+      "query": "nebula"
+    },
+    {
+      "category": "Nature",
+      "query": "cats"
+    },
+    {
+      "category": "Travel",
+      "query": "cable car"
+    },
+    {
+      "category": "Food",
+      "query": "sushi"
+    },
+    {
+      "category": "Design",
+      "query": "watercolor"
+    },
+    {
+      "category": "Science",
+      "query": "rocket"
+    },
+    {
+      "category": "Nature",
+      "query": "dogs"
+    },
+    {
+      "category": "Travel",
+      "query": "boat"
+    },
+    {
+      "category": "Food",
+      "query": "pastry"
+    },
+    {
+      "category": "Design",
+      "query": "typography"
+    },
+    {
+      "category": "Science",
+      "query": "ISS"
+    },
+    {
+      "category": "Nature",
+      "query": "horse"
+    },
+    {
+      "category": "Travel",
+      "query": "harbor"
+    },
+    {
+      "category": "Food",
+      "query": "rice"
+    },
+    {
+      "category": "Design",
+      "query": "glassblowing"
+    },
+    {
+      "category": "Science",
+      "query": "crystal"
+    },
+    {
+      "category": "Nature",
+      "query": "insects"
+    },
+    {
+      "category": "Travel",
+      "query": "cycling"
+    },
+    {
+      "category": "Food",
+      "query": "pizza"
+    },
+    {
+      "category": "Design",
+      "query": "digital art"
+    },
+    {
+      "category": "Science",
+      "query": "magnet"
+    },
+    {
+      "category": "Nature",
+      "query": "jellyfish"
+    },
+    {
+      "category": "Travel",
+      "query": "train ride"
+    },
+    {
+      "category": "Food",
+      "query": "cake"
+    },
+    {
+      "category": "Design",
+      "query": "graphic design"
+    },
+    {
+      "category": "Science",
+      "query": "pendulum"
+    },
+    {
+      "category": "Nature",
+      "query": "volcano"
+    },
+    {
+      "category": "Travel",
+      "query": "walking tour"
+    },
+    {
+      "category": "Food",
+      "query": "noodles"
+    },
+    {
+      "category": "Design",
+      "query": "weaving"
+    },
+    {
+      "category": "Science",
+      "query": "fluid"
+    },
+    {
+      "category": "Science",
+      "query": "timelapse"
+    },
+    {
+      "category": "Science",
+      "query": "physics"
+    }
+  ]
+}

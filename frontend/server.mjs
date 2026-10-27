@@ -5,13 +5,43 @@ import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDeepFMClient } from './deepfm-client.mjs';
+import { createCatalogStore } from './catalog-store.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm', '.woff2': 'font/woff2', '.md': 'text/plain; charset=utf-8' };
+const CATALOG_BODY_LIMIT = 128 * 1024;
+
+function readCatalogBody(req) {
+  return new Promise((resolve, reject) => {
+    let size = 0, complete = false, chunks = [];
+    const fail = (status, code, message) => {
+      if (complete) return;
+      complete = true; chunks = [];
+      reject(Object.assign(new Error(message), { status, code }));
+    };
+    req.on('data', chunk => {
+      if (complete) return;
+      size += chunk.length;
+      if (size > CATALOG_BODY_LIMIT) return fail(413, 'query_too_large', 'Catalog queries must be at most 128 KiB.');
+      chunks.push(chunk);
+    });
+    req.once('end', () => {
+      if (complete) return;
+      let body;
+      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      catch { return fail(400, 'invalid_query', 'Send a valid JSON catalog query.'); }
+      complete = true; chunks = []; resolve(body);
+    });
+    req.once('aborted', () => fail(400, 'invalid_query', 'The catalog request was interrupted.'));
+    req.once('error', () => fail(400, 'invalid_query', 'Unable to read the catalog query.'));
+  });
+}
 
 export function createStaticServer(directory = ROOT, options = {}) {
   const ownsClient = !options.deepfmClient;
   const deepfm = options.deepfmClient || createDeepFMClient();
+  const ownsCatalog = !options.catalogStore;
+  const catalog = options.catalogStore || createCatalogStore();
   const server = http.createServer(async (req, res) => {
     const fail = (status, message) => { res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(message); };
     try {
@@ -20,6 +50,29 @@ export function createStaticServer(directory = ROOT, options = {}) {
       if (pathname.startsWith('/api/')) {
         const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(JSON.stringify(value)); };
         const error = (status, code, message) => json(status, { error: { code, message } });
+        if (pathname === '/api/catalog' || pathname.startsWith('/api/catalog/')) {
+          if (url.searchParams.size) return error(400, 'invalid_query', 'Catalog query parameters belong in the JSON query body.');
+          const isQuery = pathname === '/api/catalog/query';
+          const isStats = pathname === '/api/catalog/stats';
+          const isItem = pathname.startsWith('/api/catalog/items/') && pathname.slice('/api/catalog/items/'.length).length > 0;
+          if (!isQuery && !isStats && !isItem) return error(404, 'not_found', 'Unknown catalog endpoint.');
+          const method = isQuery ? 'POST' : 'GET';
+          if (req.method !== method) { res.setHeader('Allow', method); return error(405, 'method_not_allowed', `This catalog endpoint accepts ${method} only.`); }
+          if (isQuery && !/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) {
+            return error(400, 'invalid_query', 'Send the catalog query as application/json.');
+          }
+          try {
+            if (isQuery) return json(200, catalog.query(await readCatalogBody(req)));
+            if (isStats) return json(200, catalog.stats());
+            const id = pathname.slice('/api/catalog/items/'.length);
+            if (id.includes('/')) return error(400, 'invalid_query', 'Choose a valid catalog item ID.');
+            const item = catalog.get(id);
+            return item ? json(200, { item }) : error(404, 'not_found', 'The catalog item was not found.');
+          } catch (problem) {
+            if ([400, 409, 413].includes(problem.status)) return error(problem.status, problem.code || 'invalid_query', problem.message);
+            return error(503, 'catalog_unavailable', 'The local catalog is unavailable. Check the catalog setup and try again.');
+          }
+        }
         if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); return error(405, 'method_not_allowed', 'Model preview endpoints accept GET only.'); }
         const methods = { '/api/deepfm/status': 'status', '/api/deepfm/profiles': 'profiles', '/api/deepfm/score': 'score' };
         const method = methods[pathname];
@@ -73,6 +126,7 @@ export function createStaticServer(directory = ROOT, options = {}) {
     }
   });
   if (ownsClient) server.once('close', () => deepfm.close());
+  if (ownsCatalog) server.once('close', () => catalog.close());
   return server;
 }
 
