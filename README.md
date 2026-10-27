@@ -767,6 +767,34 @@ Web UIs:
 | Spark application (while a job runs) | http://localhost:4040 |
 | Spark History Server | http://localhost:18080 |
 
+### Local product preview and video catalog
+
+The `frontend/` app provides a scrolling feed and a separate DeepFM prediction
+panel. With Node.js 22.13+ installed, start it from the repository root:
+
+```bash
+npm --prefix frontend run dev
+```
+
+Open **http://localhost:4173**. The catalog starts with eight bundled demo clips.
+To import a larger collection of credited, short Commons videos:
+
+```bash
+.venv/bin/python -m catalog.import_commons \
+  --limit 2000 --max-requests 600 --delay 0.5
+```
+
+Only catalog metadata is stored locally in SQLite; imported media streams on
+demand. The importer is bounded, resumable and records each file's author,
+source and recognized reuse license. Click **Refresh catalog** to include new
+imports. The feed loads pages continuously and keeps its rendered player count
+bounded; it does not manufacture extra items by repeating the demo clips.
+
+The saved DeepFM panel scores separate historical training examples. These
+catalog IDs are not mapped to KuaiRand and are not automatically ranked by that
+checkpoint. Full instructions: [frontend preview](frontend/README.md),
+[catalog and source policy](catalog/README.md), [inference contract](serving/README.md).
+
 ---
 
 ## 18. Results

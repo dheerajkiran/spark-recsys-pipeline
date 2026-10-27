@@ -6,6 +6,10 @@ are not KuaiRand records, live user activity or predictions from the trained
 model. Generic scene labels are descriptive rather than verified geolocation;
 Tokyo is identified by its source item page.
 
+This document covers the eight bundled demos. The expanded Commons catalog
+keeps its actual author, source and license on each imported item; see
+[`catalog/README.md`](../../catalog/README.md).
+
 The bundled footage and matching source thumbnails come from Mixkit. Each of
 the eight item pages below was checked on **2026-10-26** and explicitly offered
 the **Mixkit Stock Video Free License** for commercial or personal projects.
