@@ -89,7 +89,16 @@ kbd { font-family: inherit; }
 .feed-context { display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: #aaa99c; margin: 0 1px 13px; }
 .tiny-star { color: #caaf74; margin-right: 5px; }
 #position-label { font-size: 8px; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
-.feed-scroll { height: calc(100dvh - 293px); min-height: 440px; max-height: 900px; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; outline-offset: 4px; border-radius: 14px; }
+.feed-scroll { height: calc(100dvh - 293px); min-height: 440px; max-height: 900px; overflow-y: auto; overflow-anchor: none; scroll-snap-type: y mandatory; scrollbar-width: none; outline-offset: 4px; border-radius: 14px; }
+.feed-scroll .caption, .feed-scroll .video-copy h2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.creator-name { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-credit { display: block; pointer-events: auto; font-size: 8px; color: #fff9; background: transparent; margin-top: 8px; padding: 0; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-credit:hover { color: #fff; }
+.catalog-status { font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 64%; }
+.catalog-status:disabled { opacity: 1; cursor: default; }
+.catalog-status.catalog-error { color: #bb7255; }
+.catalog-attribution { background: #f1f3e9; padding: 13px; border-radius: 8px; font-size: 10px; overflow-wrap: anywhere; margin-bottom: 14px; }
+.catalog-attribution p { margin-bottom: 7px; }
 .feed-scroll::-webkit-scrollbar { display: none; }
 .feed-item { height: 100%; min-height: 440px; scroll-snap-align: start; scroll-snap-stop: always; display: flex; justify-content: center; gap: 17px; padding-bottom: 2px; position: relative; }
 .video-card { height: 100%; width: min(100%, 400px); min-width: 0; border-radius: 14px; overflow: hidden; position: relative; background: #27352d; isolation: isolate; }

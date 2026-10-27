@@ -1,6 +1,7 @@
-import { categories, posts } from './assets/catalog.js';
-import { loadState, saveState, toggleItem, getVisiblePosts, formatCount } from './feed-state.js';
+import { categories, posts as demoPosts } from './assets/catalog.js';
+import { loadState, saveState, toggleItem, formatCount } from './feed-state.js';
 import { fetchModelPreview, fetchModelScores } from './model-preview.js';
+import { createCatalogPager, playableSource } from './catalog-client.js';
 
 const paths = {
   home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
@@ -38,12 +39,21 @@ const modal = $('#modal');
 let storage;
 try { storage = window.localStorage; } catch { /* Browser may disable storage. */ }
 let state = loadState(storage);
-let view = 'for-you', category = 'All', query = '', mixOffset = 0, activeId = null;
+let view = 'for-you', category = 'All', query = '', activeId = null;
 let visible = [], observer, toastTimer, muted = true;
 let modalGeneration = 0, modelPreview = null, selectedProfileId = '';
+const posts = [...demoPosts];
+const postById = new Map(posts.map(post => [post.id, post]));
+const pager = createCatalogPager({ pageSize: 12 });
+const WINDOW_SIZE = 36;
+const WINDOW_STEP = 12;
+let catalogGeneration = 0, catalogTotal = 0, windowStart = 0, sharedView = false;
+let loadingPage = null, pageError = null, catalogLoading = false, searchTimer;
 const userPaused = new Set();
 const sessionComments = new Map();
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const mediaProbe = document.createElement('video');
+const canPlayType = type => mediaProbe.canPlayType(type);
 
 function hydrateIcons(root = document) {
   root.querySelectorAll('[data-icon]').forEach(element => { element.innerHTML = icon(element.dataset.icon); });
@@ -66,16 +76,18 @@ function clock(seconds) {
 }
 function postCard(post) {
   const liked = state.liked.includes(post.id), saved = state.saved.includes(post.id), followed = state.following.includes(post.handle);
-  return `<article class="feed-item" data-post="${post.id}" aria-label="${escape(post.title)}">
+  const imported = post.source?.provider === 'wikimedia';
+  return `<article class="feed-item" data-post="${escape(post.id)}" aria-label="${escape(post.title)}">
     <div class="video-card">
-      <video poster="${post.poster}" data-src="${post.video}" preload="none" muted playsinline loop aria-label="${escape(post.title)} video"></video>
+      <video poster="${escape(post.poster)}" data-src="${escape(playableSource(post, canPlayType))}" preload="none" muted playsinline loop aria-label="${escape(post.title)} video"></video>
       <div class="video-shade"></div>
-      <button class="play-surface paused" data-action="play" data-id="${post.id}" aria-label="Play ${escape(post.title)}"><span class="play-glyph">${icon('play')}</span></button>
-      <div class="video-top"><span class="category-tag">${icon('leaf')} ${escape(post.category.toUpperCase())}</span><button data-action="why" data-id="${post.id}" aria-label="About this video">${icon('info')}</button></div>
-      <div class="video-copy"><div class="creator-line">${avatar(post)}<div><span class="creator-name">${escape(post.creator)} ${icon('verified')}</span><div class="creator-handle">@${escape(post.handle)}</div></div><button class="follow-inline ${followed ? 'followed' : ''}" data-follow="${post.handle}" aria-pressed="${followed}">${followed ? 'Following' : 'Follow'}</button></div>
+      <button class="play-surface paused" data-action="play" data-id="${escape(post.id)}" aria-label="Play ${escape(post.title)}"><span class="play-glyph">${icon('play')}</span></button>
+      <div class="video-top"><span class="category-tag">${icon('leaf')} ${escape(post.category.toUpperCase())}</span><button data-action="why" data-id="${escape(post.id)}" aria-label="About this video">${icon('info')}</button></div>
+      <div class="video-copy"><div class="creator-line">${avatar(post)}<div><span class="creator-name">${escape(post.creator)} ${imported ? '' : icon('verified')}</span><div class="creator-handle">${imported ? 'Wikimedia Commons' : `@${escape(post.handle)}`}</div></div><button class="follow-inline ${followed ? 'followed' : ''}" data-follow="${escape(post.handle)}" aria-pressed="${followed}">${followed ? 'Following' : 'Follow'}</button></div>
         <h2>${escape(post.title)}</h2><p class="caption">${escape(post.description)}</p><div class="video-tags">${post.tags.map(tag => `<span>#${escape(tag)}</span>`).join('')}</div>
+        ${imported ? `<button class="catalog-credit" data-action="why" data-id="${escape(post.id)}">${escape(post.source.license.name)} · Credits & source ↗</button>` : ''}
       </div>
-      <div class="video-controls"><button class="control-button playback-button" data-action="play" data-id="${post.id}" aria-label="Play video">${icon('play')}</button><span class="video-time">0:00 / ${clock(post.duration)}</span><input class="video-progress" type="range" min="0" max="100" step="0.1" value="0" aria-label="Seek ${escape(post.title)}"><button class="control-button sound-button" data-action="sound" aria-label="Unmute video">${icon('mute')}</button><button class="control-button" data-action="fullscreen" data-id="${post.id}" aria-label="Expand video">${icon('expand')}</button></div>
+      <div class="video-controls"><button class="control-button playback-button" data-action="play" data-id="${post.id}" aria-label="Play video">${icon('play')}</button><span class="video-time">0:00 / ${clock(post.duration)}</span><input class="video-progress" type="range" min="0" max="100" step="0.1" value="0" aria-label="Seek ${escape(post.title)}"><button class="control-button sound-button" data-action="sound" aria-label="${muted ? 'Unmute video' : 'Mute video'}">${icon(muted ? 'mute' : 'volume')}</button><button class="control-button" data-action="fullscreen" data-id="${post.id}" aria-label="Expand video">${icon('expand')}</button></div>
     </div>
     <div class="action-rail"><button class="rail-avatar" data-follow="${post.handle}" aria-label="${followed ? 'Unfollow' : 'Follow'} ${escape(post.creator)}" aria-pressed="${followed}">${avatar(post)}<span class="plus">${followed ? '✓' : '+'}</span></button>
       <button class="rail-action ${liked ? 'selected' : ''}" data-action="like" data-id="${post.id}" aria-label="${liked ? 'Unlike' : 'Like'} ${escape(post.title)}" aria-pressed="${liked}"><span class="action-circle">${icon('heart')}</span><small>${formatCount(post.likes + Number(liked))}</small></button>
@@ -90,7 +102,7 @@ function setPlaybackUI(article) {
   const video = article.querySelector('video');
   const paused = video.paused;
   article.querySelector('.play-surface').classList.toggle('paused', paused);
-  article.querySelector('.play-surface').setAttribute('aria-label', `${paused ? 'Play' : 'Pause'} ${posts.find(p => p.id === article.dataset.post).title}`);
+  article.querySelector('.play-surface').setAttribute('aria-label', `${paused ? 'Play' : 'Pause'} ${postById.get(article.dataset.post).title}`);
   const button = article.querySelector('.playback-button');
   button.innerHTML = icon(paused ? 'play' : 'pause');
   button.setAttribute('aria-label', paused ? 'Play video' : 'Pause video');
@@ -105,36 +117,34 @@ function playActive(force = false) {
   video.muted = muted;
   video.play().catch(error => { if (error.name !== 'AbortError') setPlaybackUI(article); });
 }
-function setActive(id) {
-  if (id === activeId) return;
-  feed.querySelectorAll('video').forEach(video => video.pause());
-  activeId = id;
-  const position = visible.findIndex(post => post.id === id);
-  $('#position-label').textContent = `${String(position + 1).padStart(2, '0')} / ${String(visible.length).padStart(2, '0')}`;
-  playActive();
-}
-function renderFeed() {
-  observer?.disconnect();
-  feed.querySelectorAll('video').forEach(video => { video.pause(); video.removeAttribute('src'); video.load(); });
-  visible = getVisiblePosts(posts, state, { view, category, query });
-  if (visible.length && mixOffset && view === 'for-you') { const offset = mixOffset % visible.length; visible = [...visible.slice(offset), ...visible.slice(0, offset)]; }
-  activeId = null;
-  const labels = { 'for-you': 'A few things we think you’ll love', following: 'From the people you follow', discover: 'A new perspective is a scroll away', saved: 'Good moments, kept for later', liked: 'Things that made you pause' };
-  $('#feed-label').textContent = query ? `Results for “${query}”` : labels[view];
-  $('#position-label').textContent = `00 / ${String(visible.length).padStart(2, '0')}`;
-  if (!visible.length) {
-    const empty = query || category !== 'All' ? ['No moments found just yet.', 'Try another topic or a different search. There’s still plenty to discover.'] : view === 'following' ? ['Find your people.', 'Follow a creator from your feed. Their moments will show up right here.'] : view === 'saved' ? ['Keep the good ones.', 'Tap the bookmark on a video to save a little inspiration for later.'] : ['Your favorites start here.', 'Like a video and you’ll find it in this space.'];
-    feed.innerHTML = `<div class="empty-state">${icon(view === 'saved' ? 'bookmark' : 'compass')}<h2>${empty[0]}</h2><p>${empty[1]}</p><button class="primary-button" data-action="reset">Explore your feed ${icon('arrow-up-right')}</button></div>`;
-    return;
+function rememberPosts(items) {
+  for (const post of items) {
+    const old = postById.get(post.id);
+    if (old === post) continue;
+    if (old) posts[posts.indexOf(old)] = post;
+    else posts.push(post);
+    postById.set(post.id, post);
   }
-  feed.innerHTML = visible.map(postCard).join('');
-  feed.scrollTop = 0;
-  for (const article of feed.querySelectorAll('.feed-item')) {
+}
+function catalogFilters() {
+  return { view, category, query, preferences: state.preferences.filter(name => name !== 'All'),
+    following: state.following, ids: view === 'saved' ? state.saved : view === 'liked' ? state.liked : [] };
+}
+function disposeCard(article) {
+  observer?.unobserve(article);
+  const video = article.querySelector('video');
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+  article.remove();
+}
+function bindCards(articles) {
+  for (const article of articles) {
     const video = article.querySelector('video');
     video.addEventListener('play', () => setPlaybackUI(article));
     video.addEventListener('pause', () => setPlaybackUI(article));
     video.addEventListener('timeupdate', () => {
-      const duration = Number.isFinite(video.duration) ? video.duration : posts.find(p => p.id === article.dataset.post).duration;
+      const duration = Number.isFinite(video.duration) ? video.duration : postById.get(article.dataset.post).duration;
       article.querySelector('.video-time').textContent = `${clock(video.currentTime)} / ${clock(duration)}`;
       article.querySelector('.video-progress').value = duration ? video.currentTime / duration * 100 : 0;
     });
@@ -142,16 +152,118 @@ function renderFeed() {
       if (!video.getAttribute('src') || article.querySelector('.media-error')) return;
       const message = document.createElement('div');
       message.className = 'media-error';
-      message.innerHTML = '<span>This moment couldn’t load.</span><button data-action="retry">Try again</button>';
+      message.innerHTML = '<span>This moment couldn’t load.</span><button data-action="retry">Try again</button><button data-action="skip">Skip this clip →</button>';
       article.querySelector('.video-card').append(message);
     });
+    observer?.observe(article);
   }
-  observer = new IntersectionObserver(entries => {
-    const next = entries.filter(entry => entry.isIntersecting && entry.intersectionRatio >= .65).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-    if (next) setActive(next.target.dataset.post);
-  }, { root: feed, threshold: [.65, .85] });
-  feed.querySelectorAll('.feed-item').forEach(article => observer.observe(article));
-  setActive(visible[0].id);
+}
+function renderWindow(center, reset = false) {
+  const anchor = activeId ? feed.querySelector(`[data-post="${CSS.escape(activeId)}"]`) : null;
+  const anchorTop = anchor?.getBoundingClientRect().top;
+  let start = windowStart;
+  if (reset) start = Math.max(0, center - WINDOW_STEP);
+  else if (center < start + 3 && start > 0) start = Math.max(0, start - WINDOW_STEP);
+  else if (center >= start + WINDOW_SIZE - 3 && start + WINDOW_SIZE < visible.length) start += WINDOW_STEP;
+  const desired = visible.slice(start, start + WINDOW_SIZE);
+  const wanted = new Set(desired.map(post => post.id));
+  for (const article of feed.querySelectorAll('.feed-item')) if (!wanted.has(article.dataset.post)) disposeCard(article);
+  const existing = new Map([...feed.querySelectorAll('.feed-item')].map(article => [article.dataset.post, article]));
+  const added = [];
+  let next = feed.firstElementChild;
+  for (const post of desired) {
+    if (existing.has(post.id)) { next = existing.get(post.id).nextElementSibling; continue; }
+    const template = document.createElement('template');
+    template.innerHTML = postCard(post);
+    const article = template.content.firstElementChild;
+    feed.insertBefore(article, next);
+    added.push(article);
+  }
+  windowStart = start;
+  if (anchor?.isConnected && anchorTop !== undefined) feed.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
+  bindCards(added);
+}
+function updateCatalogStatus() {
+  const position = visible.findIndex(post => post.id === activeId);
+  $('#position-label').textContent = `${String(position + 1).padStart(2, '0')} / ${catalogTotal.toLocaleString()}`;
+  const info = $('#catalog-status');
+  info.classList.toggle('catalog-error', Boolean(pageError));
+  info.textContent = pageError ? 'Couldn’t load the next clips. Tap to retry.' : catalogLoading ? 'Loading more moments…' : sharedView ? 'Shared moment · open Explore for more' : pager.getState().hasMore ? `${catalogTotal.toLocaleString()} clips · more load as you scroll` : `${catalogTotal.toLocaleString()} clips · all loaded`;
+  info.setAttribute('aria-label', pageError ? 'Retry loading catalog' : 'Catalog loading status');
+  info.disabled = !pageError;
+}
+function setActive(id) {
+  if (id === activeId || !feed.querySelector(`[data-post="${CSS.escape(id)}"]`)) return;
+  feed.querySelectorAll('video').forEach(video => video.pause());
+  activeId = id;
+  const position = visible.findIndex(post => post.id === id);
+  renderWindow(position);
+  // Release old media buffers as well as pruning DOM nodes. Only the current
+  // clip and immediate neighbours may retain a video source.
+  for (const article of feed.querySelectorAll('.feed-item')) {
+    const index = visible.findIndex(post => post.id === article.dataset.post);
+    const video = article.querySelector('video');
+    if (Math.abs(index - position) > 1 && video.hasAttribute('src')) { video.removeAttribute('src'); video.load(); }
+  }
+  updateCatalogStatus();
+  playActive();
+  if (!pageError && position >= visible.length - 4) void loadMoreClips();
+}
+async function loadMoreClips() {
+  if (sharedView || catalogLoading || !pager.getState().hasMore) return loadingPage;
+  const generation = catalogGeneration;
+  catalogLoading = true; pageError = null; updateCatalogStatus();
+  const work = (async () => {
+    try {
+      const result = await pager.loadMore();
+      if (generation !== catalogGeneration) return;
+      visible = result.items; catalogTotal = result.total; rememberPosts(visible);
+      const position = Math.max(0, visible.findIndex(post => post.id === activeId));
+      renderWindow(position);
+    } catch (error) {
+      if (generation !== catalogGeneration) return;
+      pageError = error;
+    } finally {
+      if (generation === catalogGeneration) { catalogLoading = false; updateCatalogStatus(); }
+    }
+  })();
+  loadingPage = work;
+  await work;
+  if (loadingPage === work) loadingPage = null;
+}
+async function renderFeed({ sharedItem = null } = {}) {
+  const generation = ++catalogGeneration;
+  observer?.disconnect();
+  for (const article of feed.querySelectorAll('.feed-item')) disposeCard(article);
+  visible = []; activeId = null; windowStart = 0; catalogTotal = 0; pageError = null;
+  sharedView = Boolean(sharedItem); catalogLoading = true; loadingPage = null;
+  const labels = { 'for-you': 'A few things we think you’ll love', following: 'From the people you follow', discover: 'Explore the licensed video catalog', saved: 'Good moments, kept for later', liked: 'Things that made you pause' };
+  $('#feed-label').textContent = sharedItem ? 'A shared moment' : query ? `Results for “${query}”` : labels[view];
+  feed.innerHTML = `<div class="empty-state catalog-loading" role="status">${icon('sparkles')}<p>Finding your next moment…</p></div>`;
+  updateCatalogStatus();
+  try {
+    const result = sharedItem ? { items: [sharedItem], total: 1 } : await pager.reset(catalogFilters());
+    if (generation !== catalogGeneration) return;
+    visible = result.items; catalogTotal = result.total; rememberPosts(visible);
+    catalogLoading = false;
+    if (!visible.length) {
+      const empty = query || category !== 'All' ? ['No moments found just yet.', 'Try another topic or a different search.'] : view === 'following' ? ['Find your people.', 'Follow a creator from your feed. Their moments will show up right here.'] : view === 'saved' ? ['Keep the good ones.', 'Tap the bookmark on a video to save a little inspiration for later.'] : ['Your favorites start here.', 'Like a video and you’ll find it in this space.'];
+      feed.innerHTML = `<div class="empty-state">${icon(view === 'saved' ? 'bookmark' : 'compass')}<h2>${empty[0]}</h2><p>${empty[1]}</p><button class="primary-button" data-action="reset">Explore your feed ${icon('arrow-up-right')}</button></div>`;
+      updateCatalogStatus(); return;
+    }
+    feed.innerHTML = ''; feed.scrollTop = 0;
+    observer = new IntersectionObserver(entries => {
+      if (generation !== catalogGeneration) return;
+      const next = entries.filter(entry => feed.contains(entry.target) && entry.isIntersecting && entry.intersectionRatio >= .65).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (next) setActive(next.target.dataset.post);
+    }, { root: feed, threshold: [.65, .85] });
+    renderWindow(0, true); setActive(visible[0].id);
+  } catch (error) {
+    if (generation !== catalogGeneration) return;
+    catalogLoading = false; pageError = error;
+    feed.innerHTML = `<div class="empty-state">${icon('info')}<h2>The catalog couldn’t load.</h2><p>${escape(error.message)}</p><button class="primary-button" data-action="catalog-retry">Try again</button></div>`;
+    updateCatalogStatus();
+  }
 }
 function updateNav() {
   document.querySelectorAll('[data-view]').forEach(button => {
@@ -171,9 +283,10 @@ function renderDiscovery() {
   $('#collection-grid').innerHTML = collections.filter(item => item.post).map(({ post, title, tag, category: topic }) => `<button class="collection-card" data-category="${topic}" aria-label="Explore ${topic}"><img src="${post.poster}" alt="" loading="lazy"><span>${title}<small>${tag}</small></span></button>`).join('');
 }
 function changeView(next) {
-  view = next; category = 'All'; query = ''; mixOffset = 0;
+  view = next; category = 'All'; query = '';
   $('#search').value = '';
-  updateNav(); renderFeed();
+  clearTimeout(searchTimer);
+  updateNav(); return renderFeed();
 }
 function showModal(title, content, eyebrow = 'A LITTLE MORE YOU') {
   modalGeneration += 1;
@@ -247,20 +360,25 @@ function showInterests() {
 }
 function showComments(post) {
   const comments = [...post.comments, ...(sessionComments.get(post.id) || [])];
-  showModal('A little conversation.', `${comments.map(comment => `<div class="comment"><span class="avatar">${escape(comment.author.slice(0, 2).toUpperCase())}</span><div><strong>${escape(comment.author)}</strong><p>${escape(comment.text)}</p></div></div>`).join('')}<p class="modal-note">Sample comments belong to this demo. Your added comments stay in this browser session.</p><form class="comment-form" id="comment-form" data-id="${post.id}"><input name="comment" required maxlength="400" placeholder="Leave a little kindness…" aria-label="Your comment"><button class="primary-button" type="submit">Post</button></form>`, 'THE CONVERSATION');
+  showModal('A little conversation.', `${comments.map(comment => `<div class="comment"><span class="avatar">${escape(comment.author.slice(0, 2).toUpperCase())}</span><div><strong>${escape(comment.author)}</strong><p>${escape(comment.text)}</p></div></div>`).join('')}<p class="modal-note">Comments you add stay in this browser session. Existing comments on the eight original demo clips are sample content.</p><form class="comment-form" id="comment-form" data-id="${escape(post.id)}"><input name="comment" required maxlength="400" placeholder="Leave a little kindness…" aria-label="Your comment"><button class="primary-button" type="submit">Post</button></form>`, 'THE CONVERSATION');
 }
-function nextVideo(direction) {
+async function nextVideo(direction) {
+  const generation = catalogGeneration;
+  const startingId = activeId;
   const index = visible.findIndex(post => post.id === activeId);
+  if (direction > 0 && index + 1 >= visible.length && !sharedView && pager.getState().hasMore) await loadMoreClips();
+  if (generation !== catalogGeneration || activeId !== startingId) return;
   const target = visible[index + direction];
-  if (!target) { toast(direction > 0 ? 'You’ve reached the end of this mix. Try Fresh mix.' : 'You’re at the start of your mix.'); return; }
-  feed.querySelector(`[data-post="${target.id}"]`).scrollIntoView({ behavior: prefersReducedMotion ? 'instant' : 'smooth', block: 'start' });
+  if (!target) { toast(pageError ? 'The next page couldn’t load. Tap the catalog status to retry.' : direction > 0 ? 'You’ve reached the current catalog’s end. Refresh the catalog for newly imported clips.' : 'You’re at the start of your mix.'); return; }
+  renderWindow(index + direction);
+  feed.querySelector(`[data-post="${CSS.escape(target.id)}"]`)?.scrollIntoView({ behavior: prefersReducedMotion ? 'instant' : 'smooth', block: 'start' });
 }
 
 document.addEventListener('click', async event => {
   const nav = event.target.closest('[data-view]');
   if (nav) return changeView(nav.dataset.view);
   const topic = event.target.closest('[data-category]');
-  if (topic) { category = topic.dataset.category; mixOffset = 0; updateNav(); renderFeed(); return; }
+  if (topic) { category = topic.dataset.category; clearTimeout(searchTimer); updateNav(); void renderFeed(); return; }
   const follow = event.target.closest('[data-follow]');
   if (follow) {
     const handle = follow.dataset.follow;
@@ -282,16 +400,18 @@ document.addEventListener('click', async event => {
   }
   const button = event.target.closest('[data-action]');
   if (!button) return;
-  const action = button.dataset.action, post = posts.find(item => item.id === button.dataset.id);
+  const action = button.dataset.action, post = postById.get(button.dataset.id);
   if (action === 'deepfm') return openModelPreview();
   if (action === 'deepfm-score') return scoreModelProfile();
   if (action === 'interests' || action === 'profile') return showInterests();
-  if (action === 'about') return showModal('Welcome to Loop.', '<p>A space for your curiosity. Scroll through short films, follow a fresh perspective, and keep the moments you love.</p><p>The clips are credited stock footage, and creators, comments and counts are sample content. Your interests shape this demo feed; your likes, saves and follows stay in this browser.</p><p><strong>Try DeepFM</strong> in the header opens the project’s saved model and scores separate historical KuaiRand examples. Those item IDs are not mapped to the stock clips, so model scores do not reorder this feed.</p><p class="modal-note">Checkpoint 2 · A real model prediction preview alongside the demo feed. We’re shaping the product together, one step at a time.</p>');
+  if (action === 'about') return showModal('Welcome to Loop.', '<p>A space for your curiosity. Scroll through short films, follow a fresh perspective, and keep the moments you love.</p><p>The catalog now loads licensed videos in pages. Each imported video keeps its real source, author and license. The eight original local clips still use sample creators, comments and counts. Likes, saves and follows stay in this browser.</p><p><strong>Try DeepFM</strong> opens the saved model and scores separate historical KuaiRand examples. Catalog items have their own IDs; their order here is based on selected topics, not DeepFM scores.</p><p class="modal-note">Checkpoint 3 · A growing playable catalog with source credits and continuous loading. Review it before we connect interaction tracking and model-backed feed ranking.</p>');
   if (action === 'shortcuts') return showModal('A shortcut to good things.', '<div class="shortcut-line">Next / previous video <span><kbd>↓</kbd> <kbd>↑</kbd></span></div><div class="shortcut-line">Play / pause <kbd>Space</kbd></div><div class="shortcut-line">Like this video <kbd>L</kbd></div><div class="shortcut-line">Save this video <kbd>S</kbd></div><div class="shortcut-line">Mute / unmute <kbd>M</kbd></div><div class="shortcut-line">Search <kbd>/</kbd></div><div class="shortcut-line">Close dialog <kbd>Esc</kbd></div>');
   if (action === 'reset') return changeView('for-you');
   if (action === 'scenic') { view = 'discover'; category = 'Travel'; query = ''; $('#search').value = ''; updateNav(); renderFeed(); return; }
-  if (action === 'refresh') { if (view !== 'for-you') changeView('for-you'); mixOffset += 1; renderFeed(); toast('A fresh perspective. Keep exploring.'); return; }
-  if (action === 'retry') { button.closest('.media-error').remove(); playActive(true); return; }
+  if (action === 'refresh') { void renderFeed(); toast('Refreshing the catalog. New imports can appear in this mix.'); return; }
+  if (action === 'catalog-retry') { if (!visible.length || pageError?.status === 409) void renderFeed(); else void loadMoreClips(); return; }
+  if (action === 'skip') { void nextVideo(1); return; }
+  if (action === 'retry') { const article = button.closest('.feed-item'); button.closest('.media-error').remove(); article.querySelector('video').load(); playActive(true); return; }
   if (action === 'sound') {
     muted = !muted;
     feed.querySelectorAll('video').forEach(video => { video.muted = muted; });
@@ -315,7 +435,7 @@ document.addEventListener('click', async event => {
     if (action === 'save') toast(selected ? 'A good moment, saved for later.' : 'Removed from saved moments.');
     if ((view === 'saved' || view === 'liked') && !selected) renderFeed();
   } else if (action === 'comments') showComments(post);
-  else if (action === 'why') showModal('A little behind the moment.', `<p>${escape(post.reason)}</p><p><strong>${escape(post.creator)}</strong> · ${escape(post.location)}</p><p>This preview puts topics you choose first. It uses a small curated catalog, without live DeepFM predictions.</p><button class="primary-button" data-action="interests">Tune your interests ${icon('sliders')}</button>`, 'WHY THIS VIDEO?');
+  else if (action === 'why') showModal('A little behind the moment.', `<p>${escape(post.reason)}</p><p><strong>${escape(post.creator)}</strong> · ${escape(post.location)}</p>${post.source ? `<div class="catalog-attribution"><p>${escape(post.source.attribution)}</p><a href="${escape(post.source.url)}" target="_blank" rel="noopener noreferrer">Original source ↗</a> · <a href="${escape(post.source.license.url)}" target="_blank" rel="noopener noreferrer">${escape(post.source.license.name)} ↗</a></div>` : ''}<p>Your selected topics shape this catalog order. These item IDs are not mapped to KuaiRand, and this feed does not use live DeepFM predictions.</p><button class="primary-button" data-action="interests">Tune your interests ${icon('sliders')}</button>`, 'CREDITS & DISCOVERY');
   else if (action === 'share') {
     const link = new URL(window.location.href); link.hash = `video=${post.id}`;
     try { await navigator.clipboard.writeText(link.href); toast('Link copied. Share a little discovery.'); }
@@ -331,7 +451,7 @@ feed.addEventListener('input', event => {
   const video = event.target.closest('.feed-item').querySelector('video');
   if (Number.isFinite(video.duration)) video.currentTime = Number(event.target.value) / 100 * video.duration;
 });
-$('#search').addEventListener('input', event => { query = event.target.value.slice(0, 100); mixOffset = 0; renderFeed(); });
+$('#search').addEventListener('input', event => { query = event.target.value.slice(0, 100); clearTimeout(searchTimer); searchTimer = setTimeout(() => void renderFeed(), 180); });
 $('#close-modal').addEventListener('click', () => modal.close());
 modal.addEventListener('change', event => {
   if (event.target.id !== 'model-profile') return;
@@ -366,11 +486,26 @@ document.addEventListener('keydown', event => {
   else if (shortcuts[event.key.toLowerCase()]) { event.preventDefault(); feed.querySelector(`[data-post="${activeId}"] [data-action="${shortcuts[event.key.toLowerCase()]}"]`)?.click(); }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) feed.querySelectorAll('video').forEach(video => video.pause()); else playActive(); });
-function openSharedVideo() {
-  const id = new URLSearchParams(window.location.hash.slice(1)).get('video');
-  if (!id || !posts.some(post => post.id === id)) return;
-  changeView('discover');
-  requestAnimationFrame(() => feed.querySelector(`[data-post="${id}"]`)?.scrollIntoView({ block: 'start' }));
+async function openSharedVideo() {
+  const hash = window.location.hash;
+  const id = new URLSearchParams(hash.slice(1)).get('video');
+  if (!id) return;
+  const generation = catalogGeneration;
+  const initialView = view, initialCategory = category, initialQuery = query;
+  const stillCurrent = () => generation === catalogGeneration && hash === window.location.hash && view === initialView && category === initialCategory && query === initialQuery;
+  try {
+    const item = await pager.getItem(id);
+    if (!stillCurrent()) return;
+    clearTimeout(searchTimer);
+    view = 'discover'; category = 'All'; query = ''; $('#search').value = ''; updateNav();
+    await renderFeed({ sharedItem: item });
+  } catch { if (stillCurrent()) toast('That shared clip isn’t available in this catalog.'); }
 }
 window.addEventListener('hashchange', openSharedVideo);
-hydrateIcons(); updateNav(); renderDiscovery(); renderFeed(); openSharedVideo();
+async function initialize() {
+  hydrateIcons(); updateNav(); renderDiscovery();
+  const generation = catalogGeneration + 1;
+  await renderFeed();
+  if (generation === catalogGeneration) await openSharedVideo();
+}
+void initialize();

@@ -41,11 +41,11 @@
 
     <main class="main-layout">
       <section class="feed-column" aria-label="Video discovery">
-        <div class="feed-topline"><nav class="feed-tabs" aria-label="Feed type"><button data-view="for-you" class="active">For you</button><button data-view="following">Following</button><button data-view="discover">Explore</button></nav><button class="refresh-mix" data-action="refresh" aria-label="Refresh your mix"><span data-icon="refresh"></span><span>Fresh mix</span></button></div>
+        <div class="feed-topline"><nav class="feed-tabs" aria-label="Feed type"><button data-view="for-you" class="active">For you</button><button data-view="following">Following</button><button data-view="discover">Explore</button></nav><button class="refresh-mix" data-action="refresh" aria-label="Refresh catalog"><span data-icon="refresh"></span><span>Refresh catalog</span></button></div>
         <div id="categories" class="categories" aria-label="Filter videos by topic"></div>
         <div class="feed-context"><span id="feed-label"><span class="tiny-star">✦</span> A few things we think you'll love</span><span id="position-label">01 / 08</span></div>
         <div id="feed" class="feed-scroll" tabindex="0" aria-label="Video feed — use up and down arrows to browse"></div>
-        <div class="feed-footer"><span><span class="keycap">↑</span><span class="keycap">↓</span> to explore</span><span>Take a scroll. Find your thing.</span><button data-action="shortcuts" aria-label="Show keyboard shortcuts"><span data-icon="keyboard"></span></button></div>
+        <div class="feed-footer"><span><span class="keycap">↑</span><span class="keycap">↓</span> to explore</span><button id="catalog-status" class="catalog-status" data-action="catalog-retry" disabled aria-live="polite">Loading catalog…</button><button data-action="shortcuts" aria-label="Show keyboard shortcuts"><span data-icon="keyboard"></span></button></div>
       </section>
 
       <aside class="discovery" aria-label="Discover more">
