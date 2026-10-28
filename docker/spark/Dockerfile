@@ -9,8 +9,8 @@ USER root
 
 # pytest runs the unit tests inside the cluster, with the same Python and Java.
 RUN pip3 install --no-cache-dir pyyaml==6.0.2 pytest==8.3.3 \
- && mkdir -p /opt/spark/spark-events /opt/project \
- && chown spark:spark /opt/spark/spark-events
+ && mkdir -p /opt/spark/spark-events /opt/spark/history-store /opt/project \
+ && chown spark:spark /opt/spark/spark-events /opt/spark/history-store
 
 COPY spark-defaults.conf /opt/spark/conf/spark-defaults.conf
 

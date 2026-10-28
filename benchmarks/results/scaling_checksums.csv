@@ -1,0 +1,16 @@
+benchmark,variant,table,rows,checksum
+scaling,1_workers,gold/test,1973424,-10379489874017880761795
+scaling,1_workers,gold/test_random,19684,702850504749675950293
+scaling,1_workers,gold/train,7913346,21267609452376003700847
+scaling,1_workers,gold/val,1724872,-1708729340854915619908
+scaling,1_workers,silver/interactions,11654669,-17125046902835175755239
+scaling,2_workers,gold/test,1973424,-10379489874017880761795
+scaling,2_workers,gold/test_random,19684,702850504749675950293
+scaling,2_workers,gold/train,7913346,21267609452376003700847
+scaling,2_workers,gold/val,1724872,-1708729340854915619908
+scaling,2_workers,silver/interactions,11654669,-17125046902835175755239
+scaling,3_workers,gold/test,1973424,-10379489874017880761795
+scaling,3_workers,gold/test_random,19684,702850504749675950293
+scaling,3_workers,gold/train,7913346,21267609452376003700847
+scaling,3_workers,gold/val,1724872,-1708729340854915619908
+scaling,3_workers,silver/interactions,11654669,-17125046902835175755239
