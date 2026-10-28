@@ -22,7 +22,9 @@ x-spark-worker: &spark-worker
     SPARK_WORKER_CORES: "2"
     SPARK_WORKER_MEMORY: 1600m
     SPARK_DAEMON_MEMORY: 256m
-  mem_limit: 2g
+  # Worker daemon + executor (1 GB heap + 384 MB overhead) peaked at 1.96 GB on
+  # KuaiRand-1K features; the extra 0.5 GB is headroom, not more Spark memory.
+  mem_limit: 2560m
   depends_on:
     spark-master:
       condition: service_healthy

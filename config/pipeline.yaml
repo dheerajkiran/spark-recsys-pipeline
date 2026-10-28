@@ -70,6 +70,7 @@ join:
   # when both sides are too large to broadcast (e.g. KuaiRand-27K).
   item_daily_strategy: broadcast
   salt_buckets: 8                # S for the salted strategy
+  broadcast_video_static: true   # false: shuffle-join video_static (too big to broadcast in 1K)
 
 quality:
   max_null_rate: 0.01

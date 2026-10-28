@@ -41,6 +41,11 @@ def test_join_features_attaches_every_table_without_fan_out(spark):
     assert (r.user_idx, r.video_idx, r.video_impr_prev, r.author_impr_prev) == (4, 3, 40, 41)
 
 
+def test_video_static_shuffle_join_matches_broadcast(spark):
+    broadcast = rows(join_features(*tables(spark), "broadcast", 4))
+    assert rows(join_features(*tables(spark), "sortmerge", 4, broadcast_videos=False)) == broadcast
+
+
 def test_unknown_strategy_fails(spark):
     events, _, _, items, _ = tables(spark)
     with pytest.raises(ValueError):
