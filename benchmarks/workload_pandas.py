@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, "/opt/project")
-from pipeline.common import load_config  # noqa: E402
+from pipeline.config import load_config  # noqa: E402
 
 EVENT_KEY = ["user_id", "video_id", "time_ms"]
 EVENT_COLUMNS = ["user_id", "video_id", "time_ms", "event_date", "event_hour", "is_click",
