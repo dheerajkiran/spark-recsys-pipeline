@@ -1,0 +1,4 @@
+benchmark,variant,runs,median_seconds,min_seconds,max_seconds,config_hash
+scaling,1_workers,3,646.086,628.199,683.334,636c8d0d37d9
+scaling,2_workers,3,467.454,456.633,484.444,257cfb9f4ade
+scaling,3_workers,3,431.482,423.86,438.237,57abfcf8a576
