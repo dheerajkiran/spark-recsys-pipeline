@@ -5,7 +5,7 @@ from pyspark.sql import functions as F
 from pipeline import schemas as S
 from pipeline.clean import (
     clean_videos, dedupe_events, drop_impossible, drop_missing_keys, fill_missing,
-    cap_play_time, flag_bot_user_days, null_unknown_duration, remove_bot_user_days,
+    cap_play_time, drop_unknown_upload_date, flag_bot_user_days, null_unknown_duration, remove_bot_user_days,
 )
 
 def events(spark, rows):
@@ -69,6 +69,24 @@ def test_bot_rule_flags_fast_clicker_not_heavy_scroller(spark):
             + _day(4, 3, gap_ms=60000, play_ms=6 * hour_ms))     # 18 hours of play: bot
     bots = flag_bot_user_days(events(spark, rows), 20, 2.0, 16)
     assert sorted(r.user_id for r in bots.collect()) == [1, 4]
+
+
+def test_bot_rule_measures_speed_between_feed_requests(spark):
+    # Six videos per request, requests 30 s apart: 0 s between events, but human.
+    batched = [row(user=1, video=i, t=(i // 6) * 30000, play=100) for i in range(300)]
+    # Requests 0.5 s apart, six videos each: still a bot.
+    fast = [row(user=2, video=i, t=(i // 6) * 500, play=100) for i in range(180)]
+    bots = flag_bot_user_days(events(spark, batched + fast), 20, 2.0, 16)
+    assert [r.user_id for r in bots.collect()] == [2]
+
+
+def test_drop_unknown_upload_date_removes_only_undated_videos(spark):
+    df = events(spark, [row(video=10), row(video=11, t=2), row(video=12, t=3)])
+    videos = spark.createDataFrame([(10, datetime(2022, 4, 1).date()), (11, None), (12, datetime(2022, 4, 2).date())],
+                                   "video_id int, upload_dt date")
+    out = drop_unknown_upload_date(df, videos)
+    assert sorted(r.video_id for r in out.collect()) == [10, 12]
+    assert out.columns == df.columns
 
 
 def test_remove_bot_user_days_only_removes_that_day(spark):

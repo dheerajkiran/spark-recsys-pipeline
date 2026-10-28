@@ -1,6 +1,7 @@
 # Data (never commit datasets)
 data/
 *.csv
+!benchmarks/results/*.csv
 *.parquet
 
 # Python

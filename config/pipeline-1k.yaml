@@ -1,0 +1,31 @@
+# KuaiRand-1K run (Phase 6 benchmarks). Only the keys below differ from
+# pipeline.yaml; its layers live under /1k so Pure's stay untouched.
+# Run with: PIPELINE_CONFIG=config/pipeline-1k.yaml ./scripts/run_pipeline.sh
+
+extends: pipeline.yaml
+
+dataset:
+  version: 1k
+
+paths:
+  bronze: hdfs:///1k/bronze
+  silver: hdfs:///1k/silver
+  features: hdfs:///1k/features
+  gold: hdfs:///1k/gold
+  metadata: hdfs:///1k/gold/_metadata
+
+split:
+  # 1K's standard logs start on 2022-04-07 (Pure: 04-09), so train starts there;
+  # val and test keep Pure's dates.
+  train: [20220407, 20220429]
+
+features:
+  # 1K feed requests hold up to 20 videos after cleaning (Pure: 6), so the
+  # history window must look back past up to 19 same-timestamp events.
+  history_tie_slack: 20
+
+join:
+  # 1K's item_daily (67 MB Parquet) and video_static (4.4M videos, 61 MB) are
+  # too big to broadcast from the 768 MB driver; shuffle-join both.
+  item_daily_strategy: sortmerge
+  broadcast_video_static: false

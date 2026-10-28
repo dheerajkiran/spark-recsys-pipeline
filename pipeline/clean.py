@@ -10,12 +10,16 @@ is in README section 8 and scripts/profile_raw.py.
 2. Collapse duplicate events (same user, video, time_ms) into one row. Copies
    are the same event logged twice; a later copy sometimes has more engagement,
    so each outcome column takes its max across copies.
-3. Drop physically impossible rows: negative play time or duration.
+3. Drop physically impossible rows: negative play time or duration, and
+   impressions of videos with no upload date (video age is undefined; 58
+   videos and 183 events in KuaiRand-1K, none in Pure).
 4. Treat duration_ms == 0 as unknown (null). These are real impressions of
    videos whose length was never recorded, so the rows are kept.
 5. Cap play_time_ms at max_watch_ratio x duration_ms (looping videos).
-6. Drop bot-like user-days: implausibly fast (many events with a tiny median
-   gap) or implausibly long (more play time than a person can watch).
+6. Drop bot-like user-days: implausibly fast (many feed requests with a tiny
+   median gap) or implausibly long (more play time than a person can watch).
+   Videos of one feed request share a timestamp, so speed is measured between
+   distinct timestamps; KuaiRand-1K serves ~6 videos per request.
 
 Dimension tables keep every row; missing categories become UNKNOWN and missing
 integer codes become -1, so missingness stays visible to the model.
@@ -47,6 +51,11 @@ def drop_impossible(df: DataFrame) -> DataFrame:
     return df.filter(~(F.col("play_time_ms") < 0) & ~(F.col("duration_ms") < 0))
 
 
+def drop_unknown_upload_date(df: DataFrame, videos: DataFrame) -> DataFrame:
+    undated = videos.filter(F.col("upload_dt").isNull()).select("video_id")
+    return df.join(F.broadcast(undated), "video_id", "left_anti").select(*df.columns)
+
+
 def null_unknown_duration(df: DataFrame) -> DataFrame:
     return df.withColumn(
         "duration_ms",
@@ -62,17 +71,23 @@ def cap_play_time(df: DataFrame, max_ratio: float) -> DataFrame:
 
 def flag_bot_user_days(df: DataFrame, min_events: int, max_median_gap_s: float,
                        max_play_hours: float) -> DataFrame:
-    """Return (user_id, event_date) pairs whose activity is not humanly plausible."""
-    w = Window.partitionBy("user_id", "event_date").orderBy("time_ms")
+    """Return (user_id, event_date) pairs whose activity is not humanly plausible.
+
+    Speed counts feed requests (distinct timestamps), not events: a request's
+    videos share one time_ms, which would otherwise read as 0 s gaps.
+    """
+    keys = ["user_id", "event_date"]
+    w = Window.partitionBy(*keys).orderBy("time_ms")
     gap_s = (F.col("time_ms") - F.lag("time_ms").over(w)) / 1000
-    daily = (df.select("user_id", "event_date", "play_time_ms", gap_s.alias("gap_s"))
-             .groupBy("user_id", "event_date")
-             .agg(F.count("*").alias("events"),
-                  F.percentile_approx("gap_s", 0.5).alias("median_gap_s"),
-                  (F.sum("play_time_ms") / 3.6e6).alias("play_hours")))
-    too_fast = (F.col("events") >= min_events) & (F.col("median_gap_s") < max_median_gap_s)
+    speed = (df.select(*keys, "time_ms").distinct()
+             .select(*keys, gap_s.alias("gap_s"))
+             .groupBy(*keys)
+             .agg(F.count("*").alias("requests"),
+                  F.percentile_approx("gap_s", 0.5).alias("median_gap_s")))
+    play = df.groupBy(*keys).agg((F.sum("play_time_ms") / 3.6e6).alias("play_hours"))
+    too_fast = (F.col("requests") >= min_events) & (F.col("median_gap_s") < max_median_gap_s)
     too_long = F.col("play_hours") > max_play_hours
-    return daily.filter(too_fast | too_long).select("user_id", "event_date")
+    return speed.join(play, keys).filter(too_fast | too_long).select(*keys)
 
 
 def remove_bot_user_days(df: DataFrame, bots: DataFrame) -> DataFrame:
@@ -105,7 +120,7 @@ def clean_videos(df: DataFrame) -> DataFrame:
 
 # --- Stage ---------------------------------------------------------------------
 
-def clean_interactions(df: DataFrame, cfg: dict, stats: RunStats) -> DataFrame:
+def clean_interactions(df: DataFrame, videos: DataFrame, cfg: dict, stats: RunStats) -> DataFrame:
     c = cfg["clean"]
     n = df.count()
     stats.record("interactions_in", n)
@@ -128,6 +143,7 @@ def clean_interactions(df: DataFrame, cfg: dict, stats: RunStats) -> DataFrame:
     df = step("missing_keys", drop_missing_keys(df))
     df = step("duplicates", dedupe_events(df))
     df = step("impossible_values", drop_impossible(df))
+    df = step("unknown_upload_date", drop_unknown_upload_date(df, videos))
     df = step("unknown_duration", null_unknown_duration(df),
               changed=df.filter(F.col("duration_ms") == 0).count())
     df = step("play_time_cap", cap_play_time(df, c["max_watch_ratio"]),
@@ -149,7 +165,8 @@ def main() -> None:
 
     # Interactions
     src = spark.read.parquet(f"{bronze}/interactions").cache()
-    cleaned = clean_interactions(src, cfg, stats).select(*S.SILVER_INTERACTIONS.fieldNames())
+    videos = spark.read.parquet(f"{bronze}/videos")
+    cleaned = clean_interactions(src, videos, cfg, stats).select(*S.SILVER_INTERACTIONS.fieldNames())
     # Sorting within each date keeps a user's events together and in time
     # order: smaller files (better compression) and the order stage 3 reads in.
     (cleaned.repartition("event_date").sortWithinPartitions("event_date", "user_id", "time_ms")
