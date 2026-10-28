@@ -48,7 +48,10 @@ class FakeCluster:
             return [{"id": "driver"}, {"id": "0"}, {"id": "1"}, {"id": "2"}]
         if url.endswith("/0/taskSummary?quantiles=0.5,1.0"):
             stage = url.split("/stages/")[1].split("/")[0]
-            return {"quantiles": [0.5, 1.0], "duration": [200.0, 800.0] if stage == "0" else [10.0, 30.0]}
+            if stage == "0":
+                return {"quantiles": [0.5, 1.0], "duration": [200.0, 800.0]}
+            return {"quantiles": [0.5, 1.0], "duration": [10.0, 30.0],
+                    "shuffleReadMetrics": {"readRecords": [100.0, 900.0]}}
         raise AssertionError(f"unexpected URL {url}")
 
     def metrics(self, **kwargs):
@@ -97,6 +100,9 @@ def test_metrics_cover_every_new_app_and_its_slowest_stage():
             run["slowest_stage_median_task_ms"]) == (0.9, 800.0, 200.0)
     assert [(row["app_name"], row["stage_id"], row["seconds"]) for row in stages] == [
         ("stage-3", 0, 0.9), ("stage-3", 1, 0.25), ("stage-4", 0, 0.9), ("stage-4", 1, 0.25)]
+    # Stages without a shuffle read report zero records, not a missing value.
+    assert [(row["max_task_shuffle_read_records"], row["median_task_shuffle_read_records"])
+            for row in stages[:2]] == [(0, 0), (900.0, 100.0)]
 
 
 def test_waits_for_history_server_lag_and_times_out():
