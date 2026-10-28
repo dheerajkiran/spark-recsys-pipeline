@@ -1,0 +1,7 @@
+size_pct,table,rows,only_spark,only_pandas,mismatched_values,identical
+10,events,1167287,0,0,{},True
+10,item_daily,997224,0,0,{},True
+25,events,2918286,0,0,{},True
+25,item_daily,2274045,0,0,{},True
+50,events,5841247,0,0,{},True
+50,item_daily,4143413,0,0,{},True

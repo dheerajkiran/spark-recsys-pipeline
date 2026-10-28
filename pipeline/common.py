@@ -4,38 +4,16 @@ import argparse
 import hashlib
 import json
 import time
-from pathlib import Path
 
-import yaml
 from pyspark.sql import SparkSession
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = REPO_ROOT / "config" / "pipeline.yaml"
+from pipeline.config import DEFAULT_CONFIG, REPO_ROOT, load_config  # noqa: F401  (re-exported)
 
 
 def parse_args(description: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
     return parser.parse_args()
-
-
-def _merge(base: dict, override: dict) -> dict:
-    merged = dict(base)
-    for key, value in override.items():
-        merged[key] = (_merge(merged[key], value)
-                       if isinstance(value, dict) and isinstance(merged.get(key), dict) else value)
-    return merged
-
-
-def load_config(path: str = str(DEFAULT_CONFIG)) -> dict:
-    """Read a YAML config. A file with `extends: <file>` overrides only the keys
-    it sets in that base file (path relative to it), e.g. config/pipeline-1k.yaml."""
-    with open(path) as f:
-        cfg = yaml.safe_load(f)
-    base = cfg.pop("extends", None)
-    if base is None:
-        return cfg
-    return _merge(load_config(str(Path(path).parent / base)), cfg)
 
 
 def build_spark(app_name: str, cfg: dict) -> SparkSession:

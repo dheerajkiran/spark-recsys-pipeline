@@ -8,7 +8,10 @@ FROM apache/spark:3.5.9-java17-python3
 USER root
 
 # pytest runs the unit tests inside the cluster, with the same Python and Java.
+# pandas and pyarrow are for the pandas baseline benchmark (benchmarks/workload_pandas.py),
+# which runs in its own container from this image.
 RUN pip3 install --no-cache-dir pyyaml==6.0.2 pytest==8.3.3 \
+    numpy==1.26.4 pandas==2.2.3 pyarrow==17.0.0 \
  && mkdir -p /opt/spark/spark-events /opt/spark/history-store /opt/project \
  && chown spark:spark /opt/spark/spark-events /opt/spark/history-store
 
