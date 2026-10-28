@@ -197,7 +197,7 @@ Sized to fit a laptop with 16 GB of RAM, with about 11 GB given to Docker. Built
 
 **Images**
 - **Hadoop:** the official `apache/hadoop` images are amd64-only, so `docker/hadoop/Dockerfile` builds our own from the Apache 3.3.6 release tarball (the aarch64 or x86 build, picked automatically and checked against its SHA-512) on `eclipse-temurin:11-jre`. Hadoop 3.3 supports Java 8 and 11 at runtime.
-- **Spark:** `docker/spark/Dockerfile` is a thin layer over the official multi-arch `apache/spark:3.5.9-java17-python3` (Python 3.10). It adds `spark-defaults.conf`, the pipeline's Python dependencies, and an event-log directory.
+- **Spark:** `docker/spark/Dockerfile` is a thin layer over the official multi-arch `apache/spark:3.5.9-java17-python3` (Python 3.10). It adds `spark-defaults.conf`, the pipeline's Python dependencies (plus pandas and pyarrow for the pandas baseline benchmark, which runs in its own container from this image), and an event-log directory.
 
 All host ports bind to `127.0.0.1`. HDFS and Spark run without authentication here, so they are not reachable from the local network.
 
@@ -645,6 +645,8 @@ Rules:
 
 `benchmarks/skew.py` runs `benchmarks/skew_job.py`, the pipeline's own `join_item_daily` on 1K's `features/events` and `features/item_daily` with broadcast disabled, in three variants that differ only in skew handling: **naive** (sort-merge, AQE off), **aqe** (sort-merge, AQE skew-join splitting on, partition coalescing off so it is the only change) and **salted** (the pipeline's salted join, 8 buckets, AQE off). Three scenarios fix the data and shuffle partitions: the real keys at 200 partitions, a constructed hot key (20% of events, picked by a hash so the same rows every run, moved onto the busiest real key, video 160718 on 2022-05-06) at 200 partitions, and the same hot key at the pipeline's 24. AQE's skew size threshold is lowered from 256 MB to 32 MB (advisory partition size 16 MB) to fit partitions of this size; its 5× factor is the default. Each run checksums the join output, and all runs in a scenario must match. Partition skew is read from Spark itself: the join stage's max and median shuffle records read per task. A full run takes about 15 minutes.
 
+`benchmarks/pandas_baseline.py` runs one workload in both engines: ingest the raw 1K logs, apply the six clean rules, and build user history counts (`user_hist_cnt`, `user_hist_ctr`, `secs_since_last_event`, `user_active_days`) and `item_daily`. `benchmarks/workload_spark.py` calls the pipeline's own functions on the cluster. `benchmarks/workload_pandas.py` reproduces them in pandas 2.2 (pyarrow CSV reader), following Spark's semantics where pandas defaults differ: null-dropping filters, truncating casts, range frames over same-timestamp events, and `percentile_approx`'s lower median. A Spark test (`tests/test_workload_pandas.py`) runs both on the same edge-case CSVs and requires identical rows. pandas runs in a container from the Spark image with 6 CPUs (the cluster's executor cores) and a hard memory limit without swap: 2.5 GB (one worker's limit) or 7.5 GB (all three workers' limits together). A run killed at its limit is recorded as out of memory, and larger sizes are skipped for that limit. Data sizes are samples of whole users (seeded shuffle, nested), so each user's history stays complete. After each size, `benchmarks/compare_outputs.py` joins both engines' outputs on their keys on the cluster and requires every row and value to match (floats within 1e-9 relative). Times are wall clock from the host, including JVM or container start-up. A full run takes about 20 minutes.
+
 ### Benchmark dataset: KuaiRand-1K
 
 Pure is too small to show scaling or skew effects, so the benchmarks use KuaiRand-1K: 1.1 GB compressed, 4.3 GB of CSVs (3.1 GB of it the unused video statistics file). It has 1,000 heavy users instead of 27,285, which changed several assumptions that held for Pure. Each was measured, and `config/pipeline-1k.yaml` overrides only these keys of `pipeline.yaml`:
@@ -715,7 +717,8 @@ spark-recsys-pipeline/
 │   ├── run_pipeline.sh       # spark-submit all stages in order
 │   └── run_tests.sh          # pytest inside the spark-master container
 ├── pipeline/
-│   ├── common.py             # config, Spark session, run stats
+│   ├── common.py             # Spark session, run stats
+│   ├── config.py             # config loading (no Spark; the pandas baseline uses it too)
 │   ├── encoding.py           # vocabularies: build and apply (0 = PAD, 1 = UNK)
 │   ├── schemas.py            # explicit Spark schemas
 │   ├── ingest.py             # raw → bronze
@@ -734,6 +737,10 @@ spark-recsys-pipeline/
 │   ├── output_checksum.py    # row counts + value checksums of silver and gold
 │   ├── skew.py               # naive vs AQE skew join vs salting
 │   ├── skew_job.py           # one skew run: the item_daily join, optional hot key
+│   ├── pandas_baseline.py    # Spark vs pandas at 10/25/50/100% of the data
+│   ├── workload_spark.py     # the shared workload, with the pipeline's functions
+│   ├── workload_pandas.py    # the same workload in pandas
+│   ├── compare_outputs.py    # row-by-row comparison of both engines' outputs
 │   ├── tests/                # harness tests (host Python)
 │   └── results/              # CSVs (plots: planned)
 ├── tests/                    # pytest unit tests for transformations
@@ -981,8 +988,26 @@ What this shows:
 
 This is why the pipeline keeps sort-merge with AQE on for 1K (section 12) and keeps salting only for data where both sides are too large to broadcast and hot keys exceed what AQE splits.
 
+### Spark vs. pandas (KuaiRand-1K, ingest + clean + feature subset)
+
+1 warm-up and 3 timed runs per configuration; medians, with min–max for Spark. Silver rows are the cleaned events; both engines produced the same counts at every size they finished. Data: `benchmarks/results/pandas_*.csv` and `pandas_spark_*.csv`.
+
+| Size | Events in → silver | Spark (3 executors, 1 GB heap each) | pandas, 7.5 GB limit | pandas, 2.5 GB limit | Outputs |
+|---|---|---|---|---|---|
+| 10% (105 users) | 1.18M → 1.17M | 20.7 s (20.6–20.9) | 1.6 s, peak 1.9 GB | 1.7 s, peak 2.0 GB | identical |
+| 25% (267 users) | 2.94M → 2.92M | 27.1 s (25.5–27.4) | 4.3 s, peak 3.3 GB | **out of memory** | identical |
+| 50% (503 users) | 5.89M → 5.84M | 39.1 s (37.7–39.1) | 8.6 s, peak 5.1 GB | skipped | identical |
+| 100% (1,000 users) | 11.76M → 11.65M | 67.0 s (65.8–67.4) | **out of memory** after 12 s | skipped | Spark only |
+
+"Identical" means every row of both outputs matched on its key with no differing values: 5.84M event rows and 4.14M `item_daily` rows at 50%.
+
+What this shows:
+- **While the data fits, pandas is much faster here:** 13× at 10%, 6.3× at 25%, 4.5× at 50%. Spark pays about 15 s per run that does not depend on data size (JVM and executor start-up, planning, and the per-rule counts `clean_interactions` logs), and on these sizes its marginal cost is also higher: about 4.4 s per million events against pandas' 1.5 s. One pandas process with a multithreaded CSV reader on 6 cores has no shuffles or serialization to pay for.
+- **pandas needs the whole dataset in one process's memory, and then some.** Peak memory grew about 0.6–0.7 GB per million events on top of about 1.1 GB that every size needs (libraries and the 4.4M-row video file read for upload dates). That passed one worker's 2.5 GB at 25% and all three workers' 7.5 GB at 100%; extrapolated, the full dataset needs about 9 GB.
+- **Spark finished every size with less memory:** 3 GB of executor heap in total, because it processes partitions and spills to disk instead of holding everything at once. Its time grew roughly linearly, from 20.7 s to 67 s for 10× the data.
+- So pandas is the right tool for this workload up to a few million events on one machine; Spark is what keeps working past one machine's memory, and on a real cluster its fixed overhead is a smaller share of longer jobs. The 100% outputs could not be compared because pandas could not produce them; correctness rests on the identical outputs at 10–50% and the shared-semantics test.
+
 ### Engineering benchmarks (planned for phase 6)
 
-- Spark vs. pandas baseline across data sizes
 - CSV vs. Parquet scan performance
 - Spark UI screenshots of key stages
