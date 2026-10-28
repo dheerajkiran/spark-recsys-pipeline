@@ -36,33 +36,79 @@ def test_make_samples_writes_each_log_filtered_and_reuses_the_manifest(tmp_path)
     assert B.make_samples(raw, out, sizes=[25]) == manifest   # cached: same sources and seed
 
 
-def fake_docker(outcomes):
-    outcomes = iter(outcomes)
+class FakeDocker:
+    """docker run / inspect / rm: each run is (exit code, RESULT dict or None, OOMKilled)."""
 
-    def run(command, **kwargs):
-        code, result = next(outcomes)
-        stdout = "RESULT " + json.dumps(result) + "\n" if result else ""
-        return subprocess.CompletedProcess(command, code, stdout=stdout, stderr="killed")
-    return run
+    def __init__(self, outcomes, inspect_fails=False):
+        self.outcomes, self.inspect_fails = iter(outcomes), inspect_fails
+        self.started, self.removed, self.state = [], [], {}
+
+    def __call__(self, command, **kwargs):
+        verb = command[1]
+        if verb == "run":
+            name = next(arg for arg in command if arg.startswith("--name=")).removeprefix("--name=")
+            code, result, oom = next(self.outcomes)
+            self.started.append(name)
+            self.state[name] = {"ExitCode": code, "OOMKilled": oom}
+            stdout = "RESULT " + json.dumps(result) + "\n" if result else ""
+            return subprocess.CompletedProcess(command, code, stdout=stdout, stderr="stderr text")
+        if verb == "inspect":
+            if self.inspect_fails:
+                return subprocess.CompletedProcess(command, 1, stdout="", stderr="No such object")
+            return subprocess.CompletedProcess(command, 0, stdout=json.dumps(self.state[command[-1]]), stderr="")
+        if verb == "rm":
+            self.removed.append(command[-1])
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        raise AssertionError(command)
 
 
 RESULT = {"seconds": 1.5, "peak_rss_mb": 900.0, "interactions_in": 10, "silver_rows": 9, "item_daily_rows": 4}
 
 
-def test_pandas_runs_stop_at_the_memory_limit(tmp_path, monkeypatch):
+def pandas_runs(docker, tmp_path, monkeypatch, runs=3, warmup=1):
     monkeypatch.setattr(B, "PANDAS_OUT", tmp_path)
-    rows = B.run_pandas(25, "2.5g", runs=3, warmup=1, run=fake_docker([(0, RESULT), (137, None)]),
-                        clock=iter(range(100)).__next__)
+    return B.run_pandas(25, "2.5g", runs=runs, warmup=warmup, run=docker, clock=iter(range(100)).__next__)
+
+
+def test_successful_runs_are_parsed_and_every_container_removed(tmp_path, monkeypatch):
+    docker = FakeDocker([(0, RESULT, False)] * 4)
+    rows = pandas_runs(docker, tmp_path, monkeypatch)
+    assert [(row["run"], row["status"], row["peak_rss_mb"]) for row in rows] == [(n, "ok", 900.0) for n in range(1, 5)]
+    assert len(set(docker.started)) == 4 and docker.removed == docker.started
+
+
+def test_only_a_docker_confirmed_oom_kill_is_recorded_as_oom(tmp_path, monkeypatch):
+    docker = FakeDocker([(0, RESULT, False), (137, None, True)])
+    rows = pandas_runs(docker, tmp_path, monkeypatch)
     assert [(row["run"], row["warmup"], row["status"]) for row in rows] == [(1, True, "ok"), (2, False, "oom")]
-    with pytest.raises(RuntimeError, match="pandas run failed"):
-        B.run_pandas(25, "2.5g", runs=1, warmup=0, run=fake_docker([(1, None)]), clock=iter(range(9)).__next__)
+    assert rows[1]["seconds"] == 1   # timed before inspection: clock ticks 2 -> 3
+    assert docker.removed == docker.started
 
 
-def test_pandas_container_is_limited_and_read_only():
-    command = B.pandas_command(50, "7.5g", B.PANDAS_OUT / "p50-7.5g")
+def test_sigkill_without_oom_fails_instead_of_counting_as_oom(tmp_path, monkeypatch):
+    docker = FakeDocker([(137, None, False)])
+    with pytest.raises(RuntimeError, match="did not report an OOM kill"):
+        pandas_runs(docker, tmp_path, monkeypatch)
+    assert docker.removed == docker.started != []
+
+
+@pytest.mark.parametrize("docker, message", [
+    (FakeDocker([(1, None, False)]), "pandas run failed"),
+    (FakeDocker([(0, None, False)]), "one RESULT line"),                  # exit 0 but no output
+    (FakeDocker([(0, RESULT, False)], inspect_fails=True), "docker inspect"),
+])
+def test_failures_are_reported_and_the_container_still_removed(tmp_path, monkeypatch, docker, message):
+    with pytest.raises(RuntimeError, match=message):
+        pandas_runs(docker, tmp_path, monkeypatch)
+    assert docker.removed == docker.started != []
+
+
+def test_pandas_container_is_named_limited_and_read_only():
+    command = B.pandas_command(50, "7.5g", B.PANDAS_OUT / "p50-7.5g", "pandas-bench-abc")
+    assert "--rm" not in command and "--name=pandas-bench-abc" in command
     assert "--memory=7680m" in command and "--memory-swap=7680m" in command and f"--cpus={B.CPUS}" in command
     assert f"{B.SAMPLES / 'p50'}:/data/logs:ro" in command and f"{B.ROOT}:/opt/project:ro" in command
-    assert f"{B.RAW}:/data/logs:ro" in B.pandas_command(100, "7.5g", B.PANDAS_OUT)
+    assert f"{B.RAW}:/data/logs:ro" in B.pandas_command(100, "7.5g", B.PANDAS_OUT, "x")
 
 
 def test_summary_reports_out_of_memory_without_times():

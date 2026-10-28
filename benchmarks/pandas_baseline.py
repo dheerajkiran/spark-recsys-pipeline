@@ -6,9 +6,10 @@ The workload (ingest, clean, a feature subset) is benchmarks/workload_spark.py
 on the cluster and benchmarks/workload_pandas.py in one container from the same
 image, with 6 CPUs (the cluster's executor cores) and a hard memory limit
 without swap. Two limits are tried: 2.5 GB, one Spark worker's limit, and
-7.5 GB, all three workers' limits together. A run that exceeds its limit is
-killed by the kernel and recorded as "oom"; larger sizes are then skipped for
-that limit.
+7.5 GB, all three workers' limits together. A run is recorded as "oom" only
+when Docker reports the container OOM-killed (State.OOMKilled); larger sizes
+are then skipped for that limit. Any other failure, including a SIGKILL that
+Docker did not attribute to memory, stops the benchmark.
 
 Sizes are samples of whole users (seeded shuffle, each sample contains the
 smaller ones), so every user's history stays complete. After each size, the
@@ -23,6 +24,7 @@ import random
 import statistics
 import subprocess
 import time
+import uuid
 
 from benchmarks import common
 
@@ -152,9 +154,11 @@ def parse_line(prefix: str, out: str) -> dict:
     return json.loads(lines[0].removeprefix(prefix + " "))
 
 
-def pandas_command(size: int, memory: str, out: Path) -> list:
+def pandas_command(size: int, memory: str, out: Path, name: str) -> list:
+    # No --rm: the stopped container is kept until inspected, so its
+    # OOMKilled flag can be read; run_pandas removes it afterwards.
     limit = MEMORY[memory]
-    return ["docker", "run", "--rm", f"--memory={limit}", f"--memory-swap={limit}", f"--cpus={CPUS}",
+    return ["docker", "run", f"--name={name}", f"--memory={limit}", f"--memory-swap={limit}", f"--cpus={CPUS}",
             "--network=none", "-e", "PYTHONPATH=/opt/project",
             "-v", f"{ROOT}:/opt/project:ro", "-v", f"{local_logs(size)}:/data/logs:ro",
             "-v", f"{RAW / VIDEOS}:/data/videos.csv:ro", "-v", f"{out}:/out", IMAGE,
@@ -162,27 +166,51 @@ def pandas_command(size: int, memory: str, out: Path) -> list:
             "/data/logs", "/data/videos.csv", "/out"]
 
 
+def inspect_container(name: str, run=subprocess.run) -> dict:
+    """Docker's State of a stopped container (ExitCode, OOMKilled, ...)."""
+    result = run(["docker", "inspect", "--format", "{{json .State}}", name], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"docker inspect {name} failed: {result.stderr.strip()}")
+    state = json.loads(result.stdout)
+    if not isinstance(state.get("OOMKilled"), bool):
+        raise RuntimeError(f"docker inspect {name} did not report OOMKilled")
+    return state
+
+
+def remove_container(name: str, run=subprocess.run) -> None:
+    run(["docker", "rm", "-f", name], capture_output=True, text=True)
+
+
 def run_pandas(size: int, memory: str, *, runs: int, warmup: int, run=subprocess.run,
                clock=time.perf_counter) -> list:
-    """Timed pandas runs; stops at the first run killed for memory."""
+    """Timed pandas runs; stops at the first run Docker reports OOM-killed."""
     config = variant_config("pandas", size, memory)
     out = PANDAS_OUT / f"p{size}-{memory}"
     out.mkdir(parents=True, exist_ok=True)
     rows = []
     for number in range(1, warmup + runs + 1):
-        start = clock()
-        result = run(pandas_command(size, memory, out), capture_output=True, text=True)
-        seconds = round(clock() - start, 3)
-        row = {"benchmark": "pandas_spark", "variant": f"pandas-{memory}_p{size}", "size_pct": size,
-               "memory": memory, "run": number, "warmup": number <= warmup, "seconds": seconds,
-               "config_hash": common.config_hash(config), "config": json.dumps(config, sort_keys=True)}
-        if result.returncode == 137:   # SIGKILL: the kernel's OOM killer at the memory limit
-            rows.append({**row, "status": "oom"})
-            print(f"benchmark pandas-{memory}_p{size} run {number}: out of memory after {seconds:.1f}s", flush=True)
-            break
-        if result.returncode != 0:
-            raise RuntimeError(f"pandas run failed ({result.returncode}):\n{result.stderr[-2000:]}")
-        parsed = parse_line("RESULT", result.stdout)
+        name = f"pandas-bench-{uuid.uuid4().hex}"
+        try:
+            start = clock()
+            result = run(pandas_command(size, memory, out, name), capture_output=True, text=True)
+            seconds = round(clock() - start, 3)   # inspection and cleanup are not timed
+            state = inspect_container(name, run=run)
+            row = {"benchmark": "pandas_spark", "variant": f"pandas-{memory}_p{size}", "size_pct": size,
+                   "memory": memory, "run": number, "warmup": number <= warmup, "seconds": seconds,
+                   "config_hash": common.config_hash(config), "config": json.dumps(config, sort_keys=True)}
+            if state["OOMKilled"]:
+                rows.append({**row, "status": "oom"})
+                print(f"benchmark pandas-{memory}_p{size} run {number}: out of memory after {seconds:.1f}s",
+                      flush=True)
+                break
+            if result.returncode == 137:
+                raise RuntimeError(f"pandas run was killed (exit 137) but Docker did not report an OOM kill:\n"
+                                   f"{result.stderr[-2000:]}")
+            if result.returncode != 0:
+                raise RuntimeError(f"pandas run failed ({result.returncode}):\n{result.stderr[-2000:]}")
+            parsed = parse_line("RESULT", result.stdout)
+        finally:
+            remove_container(name, run=run)
         rows.append({**row, "status": "ok", "process_seconds": parsed["seconds"],
                      "peak_rss_mb": parsed["peak_rss_mb"], "interactions_in": parsed["interactions_in"],
                      "silver_rows": parsed["silver_rows"], "item_daily_rows": parsed["item_daily_rows"]})
