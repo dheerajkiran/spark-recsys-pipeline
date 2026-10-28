@@ -600,7 +600,7 @@ So the default is **broadcast**. Pure timings for the stage: broadcast 12 s, sor
 | AQE skew join | Spark detects oversized partitions at runtime and splits them. |
 | Manual salting | Each event gets a salt `0..S-1` from a hash of its key (not `rand()`, so every run puts each row in the same bucket). The other side is replicated `S` times, once per salt value, and the join is on (key, salt). A hot key's load is spread over `S` partitions. |
 
-For the phase 6 benchmark to show a real effect, it needs partitions that are actually skewed: broadcast disabled, plus a larger dataset (1K or a slice of 27K) or more shuffle partitions so that hot keys dominate their partition. We record the stage time and the max/median task duration from the Spark UI.
+KuaiRand-1K is just as balanced at the partition level. Its busiest (video, date) key has 382 of 11.65M events, and over 24 partitions the busiest partition is 1.01× the median for that join, 1.01× for (author, date) and 1.34× for `user_id` (1,000 users, the largest with 127K events). So the phase 6 benchmark (section 18) also uses a constructed hot key: 20% of events moved onto one (video, date), with broadcast disabled.
 
 ### Broadcast joins
 Small tables (user and video features, `item_daily` in Pure, vocabularies, per-date global click rates) are broadcast to every executor with `F.broadcast(...)`, so the large event table is not shuffled for those joins. In KuaiRand-1K, `video_static` (4.4M videos) and `item_daily` (67 MB of Parquet) are too large to broadcast from the 768 MB driver, so its config shuffle-joins both (`join.broadcast_video_static: false`, `join.item_daily_strategy: sortmerge`).
@@ -642,6 +642,8 @@ Rules:
 `benchmarks/common.py` runs a job (usually a `spark-submit` on the cluster) warm-up + N times and times each run end to end. A run's Spark applications are the ones the master lists as newly completed, so the cluster must be otherwise idle (the harness refuses to start if another app is running). For each application it reads stage times, task counts, max and median task time (Spark's nearest-rank quantiles) and input/shuffle bytes from the History Server REST API. Results go to `benchmarks/results/<benchmark>_{runs,stages,summary}.csv`; every run row carries the variant's full config and its hash, so like-for-like comparisons can be checked. `benchmarks/dummy_job.py` is a small cluster job for testing the harness.
 
 `benchmarks/scaling.py` runs the four pipeline stages (ingest to build_dataset) on `config/pipeline-1k.yaml` with 1, 2 and 3 workers. It stops and starts worker containers with Docker and waits until the master shows exactly that many alive workers. Every application in a run must report that many executors in the History Server, so a worker that failed to join cannot pass as a smaller cluster. After each worker count, `benchmarks/output_checksum.py` computes row counts and an order-independent value checksum (sum of `xxhash64` over all columns) of silver interactions and every gold split; all counts must match. All three workers are started again when it ends, even after a failure. A full run (3 counts × 4 runs) takes about 1 hour 45 minutes.
+
+`benchmarks/skew.py` runs `benchmarks/skew_job.py`, the pipeline's own `join_item_daily` on 1K's `features/events` and `features/item_daily` with broadcast disabled, in three variants that differ only in skew handling: **naive** (sort-merge, AQE off), **aqe** (sort-merge, AQE skew-join splitting on, partition coalescing off so it is the only change) and **salted** (the pipeline's salted join, 8 buckets, AQE off). Three scenarios fix the data and shuffle partitions: the real keys at 200 partitions, a constructed hot key (20% of events, picked by a hash so the same rows every run, moved onto the busiest real key, video 160718 on 2022-05-06) at 200 partitions, and the same hot key at the pipeline's 24. AQE's skew size threshold is lowered from 256 MB to 32 MB (advisory partition size 16 MB) to fit partitions of this size; its 5× factor is the default. Each run checksums the join output, and all runs in a scenario must match. Partition skew is read from Spark itself: the join stage's max and median shuffle records read per task. A full run takes about 15 minutes.
 
 ### Benchmark dataset: KuaiRand-1K
 
@@ -730,6 +732,8 @@ spark-recsys-pipeline/
 │   ├── dummy_job.py          # small cluster job for harness tests
 │   ├── scaling.py            # pipeline runtime on 1, 2 and 3 workers
 │   ├── output_checksum.py    # row counts + value checksums of silver and gold
+│   ├── skew.py               # naive vs AQE skew join vs salting
+│   ├── skew_job.py           # one skew run: the item_daily join, optional hot key
 │   ├── tests/                # harness tests (host Python)
 │   └── results/              # CSVs (plots: planned)
 ├── tests/                    # pytest unit tests for transformations
@@ -950,9 +954,35 @@ Why scaling flattens after 2 workers:
 
 So these numbers show the effect of parallelism on one laptop, not multi-machine scaling: there is no real network cost, and adding a worker does not add hardware.
 
+### Skew (KuaiRand-1K, item_daily join)
+
+1 warm-up and 3 timed runs per variant; medians, with timed-run min–max ranges in parentheses for end-to-end and join-stage times. "Records/task" is the join stage's shuffle records read per task, max over median: the partition skew Spark saw. Join outputs were identical (11,654,669 rows, same checksum) for all variants within each scenario. Data: `benchmarks/results/skew_*.csv`.
+
+The hot-key scenarios are constructed: 20% of events are moved onto one (video, date); the real keys are balanced. AQE uses a tuned 32 MB skew size threshold (reduced from 256 MB), a 16 MB advisory partition size and the default 5× skew factor. These results describe that configuration, with broadcast and AQE partition coalescing disabled.
+
+| Scenario | Variant | End to end | Join stage | Tasks | Slowest / median task | Records/task max ÷ median | Spill |
+|---|---|---|---|---|---|---|---|
+| Real keys, 200 partitions | naive | 13.9 s (13.4–17.9) | 4.5 s (4.4–8.6) | 200 | 1.25 s / 0.10 s | 96.8K ÷ 94.7K = 1.02× | 0 |
+| | aqe | 14.3 s (14.0–15.3) | 4.7 s (4.2–5.1) | 200 | 0.89 s / 0.11 s | 1.02× | 0 |
+| | salted | 21.6 s (18.5–25.9) | 7.4 s (5.7–10.1) | 200 | 1.27 s / 0.14 s | 352K ÷ 350K = 1.01× | 0 |
+| Hot key, 200 partitions | naive | 15.6 s (14.9–17.1) | 5.8 s (5.6–7.5) | 200 | 1.79 s / 0.10 s | 2.42M ÷ 83K = **29×** | 100 MB |
+| | aqe | **14.4 s** (13.5–14.4) | **4.1 s** (4.0–4.3) | 206 | 0.73 s / 0.09 s | 444K ÷ 83K = 5.4× | 0 |
+| | salted | 20.0 s (19.7–23.5) | 6.7 s (6.3–9.4) | 200 | 1.09 s / 0.15 s | 631K ÷ 338K = 1.9× | 0 |
+| Hot key, 24 partitions | naive | 16.2 s (14.3–21.8) | 5.1 s (4.8–6.5) | 24 | 3.10 s / 0.67 s | 3.03M ÷ 692K = 4.4× | 168 MB |
+| | aqe | 14.5 s (13.3–15.3) | 5.2 s (5.0–5.4) | 24 | 3.14 s / 0.76 s | 4.4× (not split) | 218 MB |
+| | salted | 22.1 s (21.4–22.5) | 9.2 s (9.2–9.7) | 24 | 3.36 s / 1.99 s | 3.40M ÷ 2.82M = 1.2× | 1.5 GB |
+
+What this shows:
+- **Real keys need no skew handling.** Partitions are within 2% of each other, AQE finds nothing to split, and salting only adds cost: it copies `item_daily` 8× (7.3M → 58M rows), so each task reads 3.7× more records and the run takes 56% longer.
+- **With a hot partition, AQE fixes it at runtime.** At 200 partitions the hot key gives one partition 29× the median. AQE split it into 7 tasks (200 → 206), which cut the slowest task from 1.79 s to 0.73 s, removed the 100 MB spill and made the join stage 29% faster (5.8 → 4.1 s).
+- **AQE only acts past its thresholds.** At 24 partitions the same hot key makes its partition only 4.4× the median, below AQE's 5× factor, so AQE changed nothing: same 24 tasks, same records per task. The straggler costs little here anyway: 24 tasks on 6 slots take 4 waves (about 2.7 s at the median task time), and a 3 s task mostly overlaps them.
+- **Salting all keys is the most expensive option in every scenario.** It does balance records (29× → 1.9×), but replicating every `item_daily` row 8 times costs more than the skew it removes. At 24 partitions it spilled 1.5 GB. Salting only the hot keys would avoid most of that, at the price of finding them first.
+- **Overall runtimes vary substantially; small median differences are inconclusive.** Within a single variant, timed-run ranges reach 7.4 s. At 24 partitions AQE did not split the hot partition, yet its median overall runtime was 1.6 s lower while its join-stage median was slightly higher (5.2 vs 5.1 s). That does not demonstrate an overall skew-handling speedup. The strongest evidence is at 200 partitions: all three AQE join-stage times (4.0–4.3 s) were below all three naive times (5.6–7.5 s), with fewer stragglers and no spill. Overall timings also include startup, reads and checksum work, so they do not isolate the join-stage benefit.
+
+This is why the pipeline keeps sort-merge with AQE on for 1K (section 12) and keeps salting only for data where both sides are too large to broadcast and hot keys exceed what AQE splits.
+
 ### Engineering benchmarks (planned for phase 6)
 
-- Skew handling: naive join vs. AQE vs. salting (stage times, task-time distribution)
 - Spark vs. pandas baseline across data sizes
 - CSV vs. Parquet scan performance
 - Spark UI screenshots of key stages

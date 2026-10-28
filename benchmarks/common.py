@@ -28,7 +28,8 @@ RUN_FIELDS = ["benchmark", "variant", "run", "warmup", "seconds", "apps", "app_i
               "slowest_stage_median_task_ms", "config_hash", "config"]
 STAGE_FIELDS = ["benchmark", "variant", "run", "warmup", "app_id", "app_name", "app_seconds",
                 "stage_id", "attempt_id", "name", "seconds", "tasks", "max_task_ms",
-                "median_task_ms", "input_bytes", "shuffle_read_bytes", "shuffle_write_bytes"]
+                "median_task_ms", "max_task_shuffle_read_records", "median_task_shuffle_read_records",
+                "input_bytes", "shuffle_read_bytes", "shuffle_write_bytes", "disk_spilled_bytes"]
 SUMMARY_FIELDS = ["benchmark", "variant", "runs", "median_seconds", "min_seconds",
                   "max_seconds", "config_hash"]
 
@@ -100,7 +101,9 @@ class SparkMetrics:
         """Completed stages of one app with their task time distribution.
 
         Spark's quantiles are nearest-rank, so the median is always an observed
-        task time (of two tasks, the slower one).
+        task time (of two tasks, the slower one). Shuffle records read per task
+        show partition skew: a hot partition is one task reading far more rows
+        than the median.
         """
         rows = []
         for stage in self.fetch(f"{self.history_url}/applications/{app_id}/stages?status=complete"):
@@ -108,12 +111,16 @@ class SparkMetrics:
             summary = self.fetch(f"{self.history_url}/applications/{app_id}/stages/{stage_id}/{attempt}"
                                  "/taskSummary?quantiles=0.5,1.0")
             median_ms, max_ms = summary["duration"]
+            median_records, max_records = summary.get("shuffleReadMetrics", {}).get("readRecords", [0, 0])
             rows.append({"stage_id": stage_id, "attempt_id": attempt, "name": stage.get("name", ""),
                          "seconds": round(_timestamp(stage["completionTime"]) - _timestamp(stage["submissionTime"]), 3),
                          "tasks": stage["numTasks"], "max_task_ms": max_ms, "median_task_ms": median_ms,
+                         "max_task_shuffle_read_records": max_records,
+                         "median_task_shuffle_read_records": median_records,
                          "input_bytes": stage.get("inputBytes", 0),
                          "shuffle_read_bytes": stage.get("shuffleReadBytes", 0),
-                         "shuffle_write_bytes": stage.get("shuffleWriteBytes", 0)})
+                         "shuffle_write_bytes": stage.get("shuffleWriteBytes", 0),
+                         "disk_spilled_bytes": stage.get("diskBytesSpilled", 0)})
         return sorted(rows, key=lambda row: (row["stage_id"], row["attempt_id"]))
 
 

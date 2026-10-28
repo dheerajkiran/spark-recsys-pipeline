@@ -1,0 +1,10 @@
+benchmark,variant,runs,median_seconds,min_seconds,max_seconds,config_hash
+skew,real-200_naive,3,13.851,13.422,17.916,b0aafe8ec41d
+skew,real-200_aqe,3,14.339,13.983,15.274,3e72e20b0be2
+skew,real-200_salted,3,21.578,18.536,25.877,14ccff2eb9d3
+skew,hot-200_naive,3,15.576,14.891,17.08,c453aed28ada
+skew,hot-200_aqe,3,14.363,13.453,14.444,6d2e96e123e3
+skew,hot-200_salted,3,19.971,19.717,23.517,70d3b41952e3
+skew,hot-24_naive,3,16.164,14.331,21.753,e130c99c8320
+skew,hot-24_aqe,3,14.545,13.34,15.307,8a9548f0ba5c
+skew,hot-24_salted,3,22.122,21.435,22.508,91a2077ec085
