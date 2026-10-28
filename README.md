@@ -990,22 +990,22 @@ This is why the pipeline keeps sort-merge with AQE on for 1K (section 12) and ke
 
 ### Spark vs. pandas (KuaiRand-1K, ingest + clean + feature subset)
 
-1 warm-up and 3 timed runs per configuration; medians, with min–max for Spark. Silver rows are the cleaned events; both engines produced the same counts at every size they finished. Data: `benchmarks/results/pandas_*.csv` and `pandas_spark_*.csv`.
+1 warm-up and 3 timed runs per configuration; medians, with timed-run min–max ranges in parentheses for both engines. Silver rows are the cleaned events; both engines produced the same counts at every size they finished. Data: `benchmarks/results/pandas_*.csv` and `pandas_spark_*.csv`.
 
 | Size | Events in → silver | Spark (3 executors, 1 GB heap each) | pandas, 7.5 GB limit | pandas, 2.5 GB limit | Outputs |
 |---|---|---|---|---|---|
-| 10% (105 users) | 1.18M → 1.17M | 20.7 s (20.6–20.9) | 1.6 s, peak 1.9 GB | 1.7 s, peak 2.0 GB | identical |
-| 25% (267 users) | 2.94M → 2.92M | 27.1 s (25.5–27.4) | 4.3 s, peak 3.3 GB | **out of memory** | identical |
-| 50% (503 users) | 5.89M → 5.84M | 39.1 s (37.7–39.1) | 8.6 s, peak 5.1 GB | skipped | identical |
+| 10% (105 users) | 1.18M → 1.17M | 20.7 s (20.6–20.9) | 1.6 s (1.6–1.7), peak 1.9 GB | 1.7 s (1.7–1.7), peak 2.0 GB | matched within tolerance |
+| 25% (267 users) | 2.94M → 2.92M | 27.1 s (25.5–27.4) | 4.3 s (3.4–4.5), peak 3.3 GB | **out of memory** | matched within tolerance |
+| 50% (503 users) | 5.89M → 5.84M | 39.1 s (37.7–39.1) | 8.6 s (8.5–8.7), peak 5.1 GB | skipped | matched within tolerance |
 | 100% (1,000 users) | 11.76M → 11.65M | 67.0 s (65.8–67.4) | **out of memory** after 12 s | skipped | Spark only |
 
-"Identical" means every row of both outputs matched on its key with no differing values: 5.84M event rows and 4.14M `item_daily` rows at 50%.
+All rows and keys matched, with numeric values within the comparison tolerance: `abs(Spark - pandas) <= 1e-9 * max(1, abs(Spark))`, with nulls required to match. This is not a claim of bitwise equality. At 50%, the comparison covered 5.84M event rows and 4.14M `item_daily` rows.
 
 What this shows:
-- **While the data fits, pandas is much faster here:** 13× at 10%, 6.3× at 25%, 4.5× at 50%. Spark pays about 15 s per run that does not depend on data size (JVM and executor start-up, planning, and the per-rule counts `clean_interactions` logs), and on these sizes its marginal cost is also higher: about 4.4 s per million events against pandas' 1.5 s. One pandas process with a multithreaded CSV reader on 6 cores has no shuffles or serialization to pay for.
-- **pandas needs the whole dataset in one process's memory, and then some.** Peak memory grew about 0.6–0.7 GB per million events on top of about 1.1 GB that every size needs (libraries and the 4.4M-row video file read for upload dates). That passed one worker's 2.5 GB at 25% and all three workers' 7.5 GB at 100%; extrapolated, the full dataset needs about 9 GB.
-- **Spark finished every size with less memory:** 3 GB of executor heap in total, because it processes partitions and spills to disk instead of holding everything at once. Its time grew roughly linearly, from 20.7 s to 67 s for 10× the data.
-- So pandas is the right tool for this workload up to a few million events on one machine; Spark is what keeps working past one machine's memory, and on a real cluster its fixed overhead is a smaller share of longer jobs. The 100% outputs could not be compared because pandas could not produce them; correctness rests on the identical outputs at 10–50% and the shared-semantics test.
+- **While the data fits, this in-memory pandas implementation is much faster here:** 13× at 10%, 6.3× at 25%, 4.5× at 50%. A rough linear fit to the measured runtimes suggests about 15 s of fixed Spark overhead per run and marginal costs of about 4.4 s per million events for Spark versus 1.5 s for pandas. These are estimates, not separately measured startup or processing times. Spark timings include JVM and executor startup, planning, and the per-rule counts `clean_interactions` logs; the pandas implementation uses one process with a multithreaded CSV reader on 6 cores.
+- **This pandas baseline loads the workload into one process's memory.** Observed peak memory grew about 0.6–0.7 GB per million events. A rough linear extrapolation suggests a baseline near 1.1 GB and around 9 GB for the full dataset; neither is an independently measured requirement. The runs failed at 25% under the 2.5 GB limit and at 100% under the 7.5 GB limit. This describes the implementation tested here; chunked or otherwise memory-optimized pandas workflows were not benchmarked.
+- **Spark completed every size with three 1 GB executor heaps.** Total Spark memory was not measured: executor non-heap memory, the driver and supporting services also use memory, so the 3 GB heap allocation cannot be compared directly with pandas process RSS or its container limit. Spark can process partitions and spill to disk. Its measured runtime grew from 20.7 s to 67 s for 10× the data.
+- This pandas baseline is substantially faster at the sizes it completes, while Spark completes the full workload under the tested configuration. The 100% outputs could not be compared because pandas could not produce them; correctness evidence comes from the row and key matches, numeric comparisons within tolerance at 10–50%, and the shared-semantics test. These single-machine results do not establish performance on a multi-machine cluster.
 
 ### Engineering benchmarks (planned for phase 6)
 
