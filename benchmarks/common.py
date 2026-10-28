@@ -22,7 +22,7 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 MASTER_URL = "http://127.0.0.1:8080"
 HISTORY_URL = "http://127.0.0.1:18080/api/v1"
 
-RUN_FIELDS = ["benchmark", "variant", "run", "warmup", "seconds", "apps", "app_ids", "stages",
+RUN_FIELDS = ["benchmark", "variant", "run", "warmup", "seconds", "apps", "app_ids", "executors", "stages",
               "tasks", "input_bytes", "shuffle_read_bytes", "shuffle_write_bytes",
               "slowest_stage_seconds", "slowest_stage_max_task_ms",
               "slowest_stage_median_task_ms", "config_hash", "config"]
@@ -38,16 +38,19 @@ def config_hash(config: dict) -> str:
     return hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
 
 
-def spark_submit(script: str, conf: dict | None = None, args=()) -> None:
+def spark_submit(script: str, conf: dict | None = None, args=(), capture=False) -> str | None:
     """Run a project script on the cluster (client mode, driver on spark-master).
 
     `script` is relative to the repository root, which the master mounts at
-    /opt/project.
+    /opt/project. With capture, returns the script's stdout (Spark logs go to
+    stderr).
     """
     command = ["docker", "exec", "spark-master", "spark-submit"]
     for key, value in sorted((conf or {}).items()):
         command += ["--conf", f"{key}={value}"]
-    subprocess.run([*command, f"/opt/project/{script}", *args], check=True)
+    result = subprocess.run([*command, f"/opt/project/{script}", *args], check=True,
+                            stdout=subprocess.PIPE if capture else None, text=capture or None)
+    return result.stdout if capture else None
 
 
 def _fetch_json(url: str):
@@ -87,6 +90,11 @@ class SparkMetrics:
                 raise TimeoutError(f"History Server did not list {missing} within {self.timeout:g}s")
             self.sleep(self.poll)
             waited += self.poll
+
+    def executors(self, app_id: str) -> int:
+        """Executors (not the driver) that ever registered with the app."""
+        return sum(1 for item in self.fetch(f"{self.history_url}/applications/{app_id}/allexecutors")
+                   if item["id"] != "driver")
 
     def stages(self, app_id: str) -> list:
         """Completed stages of one app with their task time distribution.
@@ -131,8 +139,9 @@ def run_benchmark(benchmark: str, variant: str, job, *, config: dict, runs=3, wa
         if not new_ids:
             raise RuntimeError(f"{benchmark}/{variant} run {run} started no Spark application")
         apps = metrics.wait_for_history(new_ids)
-        stages = []
+        stages, executors = [], []
         for app_id in new_ids:
+            executors.append(metrics.executors(app_id))
             attempt = apps[app_id]["attempts"][-1]
             for stage in metrics.stages(app_id):
                 stages.append({"benchmark": benchmark, "variant": variant, "run": run,
@@ -142,6 +151,8 @@ def run_benchmark(benchmark: str, variant: str, job, *, config: dict, runs=3, wa
         run_rows.append({
             "benchmark": benchmark, "variant": variant, "run": run, "warmup": is_warmup,
             "seconds": seconds, "apps": len(new_ids), "app_ids": ";".join(new_ids),
+            # Fewest executors any app had: a worker that never joined shows up here.
+            "executors": min(executors),
             "stages": len(stages), "tasks": sum(row["tasks"] for row in stages),
             **{key: sum(row[key] for row in stages)
                for key in ("input_bytes", "shuffle_read_bytes", "shuffle_write_bytes")},

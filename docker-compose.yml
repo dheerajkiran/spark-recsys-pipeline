@@ -140,8 +140,8 @@ services:
     hostname: spark-history
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.history.HistoryServer"]
     environment:
-      SPARK_DAEMON_MEMORY: 384m
-    mem_limit: 512m
+      SPARK_DAEMON_MEMORY: 768m
+    mem_limit: 1g
     ports:
       - "127.0.0.1:18080:18080"
     volumes:

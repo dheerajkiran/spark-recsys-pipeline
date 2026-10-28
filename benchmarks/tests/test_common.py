@@ -44,6 +44,8 @@ class FakeCluster:
                     {"stageId": 0, "attemptId": 0, "name": "range", "numTasks": 4,
                      "submissionTime": "2026-10-27T10:00:00.000GMT", "completionTime": "2026-10-27T10:00:00.900GMT",
                      "inputBytes": 100, "shuffleReadBytes": 0, "shuffleWriteBytes": 2400}]
+        if url.endswith("/allexecutors"):
+            return [{"id": "driver"}, {"id": "0"}, {"id": "1"}, {"id": "2"}]
         if url.endswith("/0/taskSummary?quantiles=0.5,1.0"):
             stage = url.split("/stages/")[1].split("/")[0]
             return {"quantiles": [0.5, 1.0], "duration": [200.0, 800.0] if stage == "0" else [10.0, 30.0]}
@@ -89,7 +91,7 @@ def test_metrics_cover_every_new_app_and_its_slowest_stage():
                                         metrics=cluster.metrics(), clock=clock([0, 5]))
     [run] = runs
     assert run["app_ids"] == "app-20261027100000-0003;app-20261027100000-0004"
-    assert run["apps"] == 2 and run["stages"] == 4 and run["tasks"] == 56
+    assert run["apps"] == 2 and run["executors"] == 3 and run["stages"] == 4 and run["tasks"] == 56
     assert run["input_bytes"] == 200 and run["shuffle_read_bytes"] == run["shuffle_write_bytes"] == 4800
     assert (run["slowest_stage_seconds"], run["slowest_stage_max_task_ms"],
             run["slowest_stage_median_task_ms"]) == (0.9, 800.0, 200.0)
@@ -132,13 +134,19 @@ def test_config_hash_is_order_independent_and_changes_with_any_setting():
 
 def test_spark_submit_builds_a_cluster_command(monkeypatch):
     calls = []
-    monkeypatch.setattr(common.subprocess, "run", lambda command, check: calls.append((command, check)))
-    common.spark_submit("benchmarks/dummy_job.py", {"spark.sql.shuffle.partitions": 8,
-                                                    "spark.sql.adaptive.enabled": "false"}, ["--x"])
+    class Done:
+        stdout = "CHECKSUM {}\n"
+
+    monkeypatch.setattr(common.subprocess, "run", lambda command, **kwargs: calls.append((command, kwargs)) or Done)
+    assert common.spark_submit("benchmarks/dummy_job.py", {"spark.sql.shuffle.partitions": 8,
+                                                           "spark.sql.adaptive.enabled": "false"}, ["--x"]) is None
     assert calls == [(["docker", "exec", "spark-master", "spark-submit",
                        "--conf", "spark.sql.adaptive.enabled=false",
                        "--conf", "spark.sql.shuffle.partitions=8",
-                       "/opt/project/benchmarks/dummy_job.py", "--x"], True)]
+                       "/opt/project/benchmarks/dummy_job.py", "--x"],
+                      {"check": True, "stdout": None, "text": None})]
+    assert common.spark_submit("benchmarks/dummy_job.py", capture=True) == "CHECKSUM {}\n"
+    assert calls[1][1] == {"check": True, "stdout": common.subprocess.PIPE, "text": True}
 
 
 def _cluster_is_up():
@@ -157,6 +165,7 @@ def test_dummy_job_on_the_real_cluster(tmp_path):
         config={"job": "dummy"}, runs=2, warmup=1)
     assert [row["warmup"] for row in runs] == [True, False, False]
     assert all(row["apps"] == 1 and row["stages"] >= 2 and row["shuffle_write_bytes"] > 0 for row in runs)
+    assert all(row["executors"] == 3 for row in runs)
     assert all(row["app_name"] == "benchmark-dummy" and row["max_task_ms"] >= row["median_task_ms"] >= 0
                for row in stages)
     paths = common.write_results("dummy", runs, stages, tmp_path)

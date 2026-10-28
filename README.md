@@ -209,7 +209,7 @@ All host ports bind to `127.0.0.1`. HDFS and Spark run without authentication he
 | `datanode-1`, `datanode-2` | Hadoop 3.3.6 (own build) | HDFS block storage | 1 GB each | 9864, 9865 (UI) |
 | `spark-master` | Spark 3.5.9 | Cluster manager; also runs the driver of jobs submitted from it | 1.5 GB | 8080 (UI), 7077 (RPC), 4040 (app UI) |
 | `spark-worker-1..3` | Spark 3.5.9 | One executor each (2 cores, 1 GB heap) | 2 cores, 2.5 GB each (worker + executor peaked at about 2.0 GiB on KuaiRand-1K) | 8081–8083 (UI) |
-| `spark-history` | Spark 3.5.9 | History Server for finished jobs | 512 MB | 18080 (UI) |
+| `spark-history` | Spark 3.5.9 | History Server for finished jobs; keeps loaded apps in an on-disk store (`spark.history.store.path`) | 1 GB (768 MB heap) | 18080 (UI) |
 
 **Data locality caveat:** Spark workers and DataNodes run in separate containers, so executors never find a block on their own "node" and every HDFS read crosses the Docker network. On one laptop this costs little, since the network is virtual. Co-locating a DataNode and a worker in one container is a possible later experiment.
 
@@ -224,6 +224,7 @@ All host ports bind to `127.0.0.1`. HDFS and Spark run without authentication he
 | `spark.serializer` | `KryoSerializer` | Faster and more compact than Java serialization |
 | `spark.sql.windowExec.buffer.in.memory.threshold` | `131072` (default 4096) | Window functions buffer a user's whole history. Past the threshold they spill in many small files, and reading them back opens each with a 1 MB heap buffer; KuaiRand-1K's largest user (127K events) ran executors out of heap. Changes memory use only, not results |
 | `spark.eventLog.enabled` | `true` | Needed for the History Server and benchmark evidence |
+| `spark.history.store.path` | `/opt/spark/history-store` | The History Server keeps loaded applications on disk instead of in its heap. With the in-memory default and a 384 MB heap, it ran out of memory partway through the scaling benchmark |
 | `dfs.replication` (HDFS) | `2` | Matches the number of DataNodes. Also set as `spark.hadoop.dfs.replication`, because Spark's HDFS client does not read the cluster's `hdfs-site.xml` and would otherwise write files with 3 replicas |
 
 ### HDFS directory layout
@@ -640,6 +641,8 @@ Rules:
 
 `benchmarks/common.py` runs a job (usually a `spark-submit` on the cluster) warm-up + N times and times each run end to end. A run's Spark applications are the ones the master lists as newly completed, so the cluster must be otherwise idle (the harness refuses to start if another app is running). For each application it reads stage times, task counts, max and median task time (Spark's nearest-rank quantiles) and input/shuffle bytes from the History Server REST API. Results go to `benchmarks/results/<benchmark>_{runs,stages,summary}.csv`; every run row carries the variant's full config and its hash, so like-for-like comparisons can be checked. `benchmarks/dummy_job.py` is a small cluster job for testing the harness.
 
+`benchmarks/scaling.py` runs the four pipeline stages (ingest to build_dataset) on `config/pipeline-1k.yaml` with 1, 2 and 3 workers. It stops and starts worker containers with Docker and waits until the master shows exactly that many alive workers. Every application in a run must report that many executors in the History Server, so a worker that failed to join cannot pass as a smaller cluster. After each worker count, `benchmarks/output_checksum.py` computes row counts and an order-independent value checksum (sum of `xxhash64` over all columns) of silver interactions and every gold split; all counts must match. All three workers are started again when it ends, even after a failure. A full run (3 counts × 4 runs) takes about 1 hour 45 minutes.
+
 ### Benchmark dataset: KuaiRand-1K
 
 Pure is too small to show scaling or skew effects, so the benchmarks use KuaiRand-1K: 1.1 GB compressed, 4.3 GB of CSVs (3.1 GB of it the unused video statistics file). It has 1,000 heavy users instead of 27,285, which changed several assumptions that held for Pure. Each was measured, and `config/pipeline-1k.yaml` overrides only these keys of `pipeline.yaml`:
@@ -725,8 +728,10 @@ spark-recsys-pipeline/
 ├── benchmarks/
 │   ├── common.py             # harness: repeated runs, History Server metrics, CSVs
 │   ├── dummy_job.py          # small cluster job for harness tests
+│   ├── scaling.py            # pipeline runtime on 1, 2 and 3 workers
+│   ├── output_checksum.py    # row counts + value checksums of silver and gold
 │   ├── tests/                # harness tests (host Python)
-│   └── results/              # CSVs and plots (scaling, skew, pandas: planned)
+│   └── results/              # CSVs (plots: planned)
 ├── tests/                    # pytest unit tests for transformations
 └── README.md
 ```
@@ -919,9 +924,34 @@ directory after obtaining the selected reference checkpoints:
 The legacy `shuffle_labels.py` default still copies real validation labels;
 `verify_training_results.py --control` retains its original failing criterion.
 
+### Scaling (KuaiRand-1K)
+
+Full pipeline (ingest, clean, features, build_dataset) on 11.76M events, 1 warm-up and 3 timed runs per worker count. Each worker runs one executor with 2 cores. Every run had the expected number of executors in all four applications, and silver and gold row counts and checksums were identical for 1, 2 and 3 workers. Data: `benchmarks/results/scaling_*.csv`.
+
+| Workers | Task slots | Median (min–max) | Speedup |
+|---|---|---|---|
+| 1 | 2 | 646 s (628–683) | 1.00× |
+| 2 | 4 | 467 s (457–484) | 1.38× |
+| 3 | 6 | 431 s (424–438) | 1.50× |
+
+Median application time per stage:
+
+| Stage | 1 worker | 2 workers | 3 workers | Speedup at 3 |
+|---|---|---|---|---|
+| ingest | 76 s | 68 s | 67 s | 1.13× |
+| clean | 108 s | 68 s | 57 s | 1.90× |
+| features | 182 s | 133 s | 123 s | 1.49× |
+| build_dataset | 277 s | 193 s | 182 s | 1.53× |
+
+Why scaling flattens after 2 workers:
+- **Serial work.** Ingest's slowest stage is a single 40 s task: `coalesce(1)` on the 3.4 GB video statistics CSV makes its read and one-file write run as one task, and every application pays JVM startup and driver-side planning. Neither gets faster with more executors.
+- **Few tasks per stage.** After AQE coalescing, the large stages have 8 to 24 tasks. Going from 4 to 6 slots adds a partial wave rather than removing one, and a stage still waits for its slowest task (up to 19 s in features).
+- **One machine.** All three workers, both DataNodes, the namenode and the driver share the Docker VM's 10 CPUs and one SSD. Slowest-task times grew from 2 to 3 workers in the heaviest stages (features 13.4 → 19.1 s, build_dataset's quality-check stage 5.5 → 7.6 s), which points to shared CPU and disk, not idle executors.
+
+So these numbers show the effect of parallelism on one laptop, not multi-machine scaling: there is no real network cost, and adding a worker does not add hardware.
+
 ### Engineering benchmarks (planned for phase 6)
 
-- Pipeline runtime with 1, 2 and 3 workers (plot)
 - Skew handling: naive join vs. AQE vs. salting (stage times, task-time distribution)
 - Spark vs. pandas baseline across data sizes
 - CSV vs. Parquet scan performance
