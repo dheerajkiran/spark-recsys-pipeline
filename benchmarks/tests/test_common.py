@@ -43,7 +43,7 @@ class FakeCluster:
                      "inputBytes": 0, "shuffleReadBytes": 2400, "shuffleWriteBytes": 0},
                     {"stageId": 0, "attemptId": 0, "name": "range", "numTasks": 4,
                      "submissionTime": "2026-10-27T10:00:00.000GMT", "completionTime": "2026-10-27T10:00:00.900GMT",
-                     "inputBytes": 100, "shuffleReadBytes": 0, "shuffleWriteBytes": 2400}]
+                     "inputBytes": 100, "inputRecords": 7, "shuffleReadBytes": 0, "shuffleWriteBytes": 2400}]
         if url.endswith("/allexecutors"):
             return [{"id": "driver"}, {"id": "0"}, {"id": "1"}, {"id": "2"}]
         if url.endswith("/0/taskSummary?quantiles=0.5,1.0"):
@@ -96,6 +96,7 @@ def test_metrics_cover_every_new_app_and_its_slowest_stage():
     assert run["app_ids"] == "app-20261027100000-0003;app-20261027100000-0004"
     assert run["apps"] == 2 and run["executors"] == 3 and run["stages"] == 4 and run["tasks"] == 56
     assert run["input_bytes"] == 200 and run["shuffle_read_bytes"] == run["shuffle_write_bytes"] == 4800
+    assert run["input_records"] == 14 and stages[1]["input_records"] == 0   # absent counts as 0
     assert (run["slowest_stage_seconds"], run["slowest_stage_max_task_ms"],
             run["slowest_stage_median_task_ms"]) == (0.9, 800.0, 200.0)
     assert [(row["app_name"], row["stage_id"], row["seconds"]) for row in stages] == [

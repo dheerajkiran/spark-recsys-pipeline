@@ -23,13 +23,13 @@ MASTER_URL = "http://127.0.0.1:8080"
 HISTORY_URL = "http://127.0.0.1:18080/api/v1"
 
 RUN_FIELDS = ["benchmark", "variant", "run", "warmup", "seconds", "apps", "app_ids", "executors", "stages",
-              "tasks", "input_bytes", "shuffle_read_bytes", "shuffle_write_bytes",
+              "tasks", "input_bytes", "input_records", "shuffle_read_bytes", "shuffle_write_bytes",
               "slowest_stage_seconds", "slowest_stage_max_task_ms",
               "slowest_stage_median_task_ms", "config_hash", "config"]
 STAGE_FIELDS = ["benchmark", "variant", "run", "warmup", "app_id", "app_name", "app_seconds",
                 "stage_id", "attempt_id", "name", "seconds", "tasks", "max_task_ms",
                 "median_task_ms", "max_task_shuffle_read_records", "median_task_shuffle_read_records",
-                "input_bytes", "shuffle_read_bytes", "shuffle_write_bytes", "disk_spilled_bytes"]
+                "input_bytes", "input_records", "shuffle_read_bytes", "shuffle_write_bytes", "disk_spilled_bytes"]
 SUMMARY_FIELDS = ["benchmark", "variant", "runs", "median_seconds", "min_seconds",
                   "max_seconds", "config_hash"]
 
@@ -118,6 +118,7 @@ class SparkMetrics:
                          "max_task_shuffle_read_records": max_records,
                          "median_task_shuffle_read_records": median_records,
                          "input_bytes": stage.get("inputBytes", 0),
+                         "input_records": stage.get("inputRecords", 0),
                          "shuffle_read_bytes": stage.get("shuffleReadBytes", 0),
                          "shuffle_write_bytes": stage.get("shuffleWriteBytes", 0),
                          "disk_spilled_bytes": stage.get("diskBytesSpilled", 0)})
@@ -162,7 +163,7 @@ def run_benchmark(benchmark: str, variant: str, job, *, config: dict, runs=3, wa
             "executors": min(executors),
             "stages": len(stages), "tasks": sum(row["tasks"] for row in stages),
             **{key: sum(row[key] for row in stages)
-               for key in ("input_bytes", "shuffle_read_bytes", "shuffle_write_bytes")},
+               for key in ("input_bytes", "input_records", "shuffle_read_bytes", "shuffle_write_bytes")},
             "slowest_stage_seconds": slowest["seconds"] if slowest else None,
             "slowest_stage_max_task_ms": slowest["max_task_ms"] if slowest else None,
             "slowest_stage_median_task_ms": slowest["median_task_ms"] if slowest else None,
