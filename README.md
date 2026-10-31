@@ -647,6 +647,8 @@ Rules:
 
 `benchmarks/pandas_baseline.py` runs one workload in both engines: ingest the raw 1K logs, apply the six clean rules, and build user history counts (`user_hist_cnt`, `user_hist_ctr`, `secs_since_last_event`, `user_active_days`) and `item_daily`. `benchmarks/workload_spark.py` calls the pipeline's own functions on the cluster. `benchmarks/workload_pandas.py` reproduces them in pandas 2.2 (pyarrow CSV reader), following Spark's semantics where pandas defaults differ: null-dropping filters, truncating casts, range frames over same-timestamp events, and `percentile_approx`'s lower median. A Spark test (`tests/test_workload_pandas.py`) runs both on the same edge-case CSVs and requires identical rows. pandas runs in a container from the Spark image with 6 CPUs (the cluster's executor cores) and a hard memory limit without swap: 2.5 GB (one worker's limit) or 7.5 GB (all three workers' limits together). Each run's container is kept until the driver has read Docker's `State.OOMKilled`; a run is recorded as out of memory only when Docker reports it OOM-killed, and larger sizes are then skipped for that limit. Any other failure, including a SIGKILL (exit 137) that Docker did not attribute to memory, stops the benchmark. Data sizes are samples of whole users (seeded shuffle, nested), so each user's history stays complete. After each size, `benchmarks/compare_outputs.py` joins both engines' outputs on their keys on the cluster and requires every row and value to match (floats within 1e-9 relative). Times are wall clock from the host, including JVM or container start-up. A full run takes about 20 minutes.
 
+`benchmarks/formats.py` runs four queries, each as its own Spark application (`benchmarks/format_job.py`), on the raw 1K log CSVs and on bronze Parquet; the two variants of a query differ only in the format read. Bronze holds the same rows as the CSVs plus three columns derived from `time_ms`, so the CSV side gets `event_date` from the same `ingest.to_bronze_interactions` and is read with the explicit raw schema (no inference). The queries each exercise a different Parquet feature: **all_columns** sums every raw column (nothing to skip, only encoding and compression differ), **two_columns** computes per-user impressions and clicks (column pruning), **date_range** aggregates the last 7 of 32 days (partition pruning on `event_date` directories), and **one_user** aggregates one median-sized user (row-group and page statistics on `user_id`; bronze is sorted by user within each date). Recorded per run: end-to-end time, the query's own time measured inside the job (the action only, without JVM and session start-up), and bytes and records read from the History Server. Each run's result checksum must match the other format's for the same query, and a Spark test runs every query on matching tiny CSV and partitioned Parquet data. A full run takes about 5 minutes.
+
 ### Benchmark dataset: KuaiRand-1K
 
 Pure is too small to show scaling or skew effects, so the benchmarks use KuaiRand-1K: 1.1 GB compressed, 4.3 GB of CSVs (3.1 GB of it the unused video statistics file). It has 1,000 heavy users instead of 27,285, which changed several assumptions that held for Pure. Each was measured, and `config/pipeline-1k.yaml` overrides only these keys of `pipeline.yaml`:
@@ -741,6 +743,8 @@ spark-recsys-pipeline/
 │   ├── workload_spark.py     # the shared workload, with the pipeline's functions
 │   ├── workload_pandas.py    # the same workload in pandas
 │   ├── compare_outputs.py    # row-by-row comparison of both engines' outputs
+│   ├── formats.py            # CSV vs Parquet: four queries, bytes read and query time
+│   ├── format_job.py         # one format run: one query on CSV or bronze Parquet
 │   ├── tests/                # harness tests (host Python)
 │   └── results/              # CSVs (plots: planned)
 ├── tests/                    # pytest unit tests for transformations
@@ -1009,7 +1013,23 @@ What this shows:
 - **Spark completed every size with three 1 GB executor heaps.** Total Spark memory was not measured: executor non-heap memory, the driver and supporting services also use memory, so the 3 GB heap allocation cannot be compared directly with pandas process RSS or its container limit. Spark can process partitions and spill to disk. Its measured runtime grew from 20.7 s to 67 s for 10× the data.
 - This pandas baseline is substantially faster at the sizes it completes, while Spark completes the full workload under the tested configuration. The 100% outputs could not be compared because pandas could not produce them; correctness evidence comes from the row and key matches, numeric comparisons within tolerance at 10–50%, and the shared-semantics test. These single-machine results do not establish performance on a multi-machine cluster.
 
+### CSV vs. Parquet (KuaiRand-1K interactions)
+
+1 warm-up and 3 timed runs per variant; medians, with timed-run min–max ranges in parentheses. Stored size on HDFS (one replica): the three log CSVs take 869 MB; bronze Parquet (snappy, partitioned by `event_date`) takes 172 MB, 5.1× smaller, although it also holds three derived columns. Every run of a query returned the same result checksum in both formats. Data: `benchmarks/results/formats_*.csv`.
+
+| Query | Bytes read: CSV → Parquet | Query time: CSV → Parquet | End to end: CSV → Parquet |
+|---|---|---|---|
+| all_columns | 869 MB → 142 MB (6.1× less) | 4.06 s (3.85–4.13) → 2.29 s (2.17–2.34) | 6.9 s → 6.4 s |
+| two_columns | 869 MB → 2.0 MB (437× less) | 3.32 s (3.11–3.43) → 1.97 s (1.93–1.98) | 6.9 s → 5.3 s |
+| date_range | 869 MB → 7.6 MB (114× less) | 3.52 s (3.30–3.62) → 1.46 s (1.46–1.50) | 6.5 s → 4.8 s |
+| one_user | 869 MB → 12.6 MB (69× less) | 2.88 s (2.77–2.98) → 1.68 s (1.62–1.70) | 5.9 s → 5.7 s |
+
+What this shows:
+- **Parquet reads far less data, and how much less depends on the query.** Even reading every row, it reads 6.1× fewer bytes than CSV, from columnar encoding and compression. Asking for two of the columns cuts that to 2.0 MB, because Parquet reads only those columns, and a sorted `user_id` and a 0/1 click flag compress very well. The date filter reads only 7 of 32 date directories (2.88M of 11.76M rows). The one-user filter read 620,000 of 11.76M rows, a whole number of Parquet's default 20,000-row pages, consistent with skipping pages whose `user_id` range excludes the user; the counters do not isolate page skipping from row-group skipping. Both filtered queries also benefit from column pruning, so their byte reductions do not measure filtering alone. CSV must read and parse all 869 MB for every query.
+- **Query time improves far less than bytes: 1.7–2.4× faster.** The fastest observed action still took about 1.5 s on this cluster, consistent with fixed costs such as planning and task scheduling limiting the gain from a smaller read. These costs were not measured separately. The CSV files were read many times in a row and were most likely served from the operating system's page cache, so their 869 MB cost mainly CPU parsing; on cold or remote storage the byte savings would matter more. Cache state was not measured.
+- **End to end, the gap shrinks to 0.2–1.7 s.** End-to-end timing also includes JVM and Spark-session start-up, source/schema setup and shutdown; median end-to-end time exceeds median query time by roughly 3–4 s. These costs were not measured separately. For the pipeline, which reads its inputs once per stage, the larger benefits are the smaller footprint on HDFS and the reads that later stages skip entirely.
+- **CSV's record counts are not comparable.** For one_user, CSV reports 8,384 input records because Spark's CSV reader applies the pushed-down filter before counting; it still read and parsed all 869 MB. Bytes read are the comparable measure.
+
 ### Engineering benchmarks (planned for phase 6)
 
-- CSV vs. Parquet scan performance
 - Spark UI screenshots of key stages

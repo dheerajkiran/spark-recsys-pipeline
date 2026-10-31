@@ -1,0 +1,9 @@
+benchmark,variant,runs,median_seconds,min_seconds,max_seconds,config_hash
+formats,all_columns_csv,3,6.86,6.855,7.676,60e579123fa9
+formats,all_columns_parquet,3,6.435,5.268,6.49,11fb4eebf7e9
+formats,two_columns_csv,3,6.937,5.927,6.938,6dbd1d080243
+formats,two_columns_parquet,3,5.344,5.291,6.071,2d36e2a8bf77
+formats,date_range_csv,3,6.458,6.427,7.028,9b04038219ef
+formats,date_range_parquet,3,4.804,4.803,4.865,58b7e5542545
+formats,one_user_csv,3,5.932,5.359,6.458,ae1876f87865
+formats,one_user_parquet,3,5.72,5.639,5.815,d230bd25d264
