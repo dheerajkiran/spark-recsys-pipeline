@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 from benchmarks import common  # noqa: E402
+from benchmarks.check_readme import ratio  # noqa: E402  (same rounding as the README table)
 
 SURFACE, INK, INK_2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3de"
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]          # categorical slots 1-3
@@ -61,11 +62,11 @@ def save(fig, out: Path, name: str) -> Path:
     return path
 
 
-def label_bars(ax, bars, fmt="{:.1f}", **kwargs):
+def label_bars(ax, bars, fmt="{:.1f}", fontsize=7.5):
     for bar in bars:
-        ax.annotate(fmt.format(bar.get_height()), (bar.get_x() + bar.get_width() / 2, bar.get_height()),
+        ax.annotate(fmt(bar.get_height()) if callable(fmt) else fmt.format(bar.get_height()), (bar.get_x() + bar.get_width() / 2, bar.get_height()),
                     xytext=(0, 2), textcoords="offset points", ha="center", va="bottom",
-                    fontsize=7.5, color=INK_2, **kwargs)
+                    fontsize=fontsize, color=INK_2)
 
 
 # --- Scaling ---------------------------------------------------------------------
@@ -130,16 +131,16 @@ def plot_skew_join(results: Path, out: Path) -> Path:
         bars = left.bar(x, [med(s, variant, "seconds") for s, _ in SCENARIOS], width - 0.03,
                         color=SERIES[i], label=variant)
         label_bars(left, bars)
-        ratio = [med(s, variant, "max_task_shuffle_read_records") / med(s, variant, "median_task_shuffle_read_records")
-                 for s, _ in SCENARIOS]
-        bars = right.bar(x, ratio, width - 0.03, color=SERIES[i], label=variant)
-        label_bars(right, bars, "{:.1f}×")
+        ratios = [med(s, variant, "max_task_shuffle_read_records") / med(s, variant, "median_task_shuffle_read_records")
+                  for s, _ in SCENARIOS]
+        bars = right.bar(x, ratios, width - 0.03, color=SERIES[i], label=variant)
+        label_bars(right, bars, ratio, fontsize=6.2)
     for ax in (left, right):
         ax.set_xticks(range(len(SCENARIOS)), [label for _, label in SCENARIOS])
         ax.grid(axis="x", visible=False)
     left.set(title="Join stage time (median)", ylabel="seconds")
     left.legend(loc="upper left", ncols=3)
-    right.set(title="Partition skew: slowest ÷ median task's shuffle records", ylabel="ratio (log scale)",
+    right.set(title="Partition skew: max ÷ median shuffle records per task", ylabel="ratio (log scale)",
               yscale="log", ylim=(0.8, 60))
     right.yaxis.set_major_formatter(PLAIN)
     right.axhline(5, color=MUTED, linestyle="--", linewidth=1.2)
@@ -187,7 +188,7 @@ def plot_skew_timeline(results: Path, out: Path) -> Path:
     fig.legend(handles, ["task", "task reading > 2× the median task's shuffle records (hot key)"],
                loc="upper center", bbox_to_anchor=(0.5, -0.01), ncols=2, fontsize=7.5)
     axes[1].set_xlabel("seconds since the join stage's first task started")
-    title(fig, "Join-stage task timeline, hot key at 200 partitions (timed run 3)")
+    title(fig, "Join-stage task timeline, hot key at 200 partitions (run 3: the second timed run)")
     return save(fig, out, "skew_timeline")
 
 

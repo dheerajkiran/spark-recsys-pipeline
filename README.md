@@ -634,7 +634,7 @@ DataFrames reused by several feature builders (the cleaned interaction table) ar
 Rules:
 - Each configuration runs **3 times**, and we report the median.
 - The first run after cluster start is discarded (warm-up).
-- Results are saved as CSVs in `benchmarks/results/`. `benchmarks/plots.py` draws every plot from those CSVs alone (a rerun writes byte-identical PNGs), and `benchmarks/check_readme.py` checks every benchmark number in section 18 against them.
+- Results are saved as CSVs in `benchmarks/results/`. `benchmarks/plots.py` draws every plot from those CSVs alone (a rerun writes byte-identical PNGs), and `benchmarks/check_readme.py` checks every cell of the benchmark tables in section 18 against them; prose numbers are not checked.
 - Because everything runs on one laptop, scaling results show the effect of parallelism, not true multi-machine network cost. This limitation is stated alongside the results.
 
 ### Harness
@@ -987,17 +987,17 @@ So these numbers show the effect of parallelism on one laptop, not multi-machine
 
 The hot-key scenarios are constructed: 20% of events are moved onto one (video, date); the real keys are balanced. AQE uses a tuned 32 MB skew size threshold (reduced from 256 MB), a 16 MB advisory partition size and the default 5× skew factor. These results describe that configuration, with broadcast and AQE partition coalescing disabled.
 
-| Scenario | Variant | End to end | Join stage | Tasks | Slowest / median task | Records/task max ÷ median | Spill |
+| Scenario | Variant | End to end | Join stage | Tasks | Slowest / median task duration | Records/task max ÷ median | Spill |
 |---|---|---|---|---|---|---|---|
 | Real keys, 200 partitions | naive | 13.9 s (13.4–17.9) | 4.5 s (4.4–8.6) | 200 | 1.25 s / 0.10 s | 96.8K ÷ 94.7K = 1.02× | 0 |
-| | aqe | 14.3 s (14.0–15.3) | 4.7 s (4.2–5.1) | 200 | 0.89 s / 0.11 s | 1.02× | 0 |
-| | salted | 21.6 s (18.5–25.9) | 7.4 s (5.7–10.1) | 200 | 1.27 s / 0.14 s | 352K ÷ 350K = 1.01× | 0 |
-| Hot key, 200 partitions | naive | 15.6 s (14.9–17.1) | 5.8 s (5.6–7.5) | 200 | 1.79 s / 0.10 s | 2.42M ÷ 83K = **29×** | 100 MB |
-| | aqe | **14.4 s** (13.5–14.4) | **4.1 s** (4.0–4.3) | 206 | 0.73 s / 0.09 s | 444K ÷ 83K = 5.4× | 0 |
-| | salted | 20.0 s (19.7–23.5) | 6.7 s (6.3–9.4) | 200 | 1.09 s / 0.15 s | 631K ÷ 338K = 1.9× | 0 |
-| Hot key, 24 partitions | naive | 16.2 s (14.3–21.8) | 5.1 s (4.8–6.5) | 24 | 3.10 s / 0.67 s | 3.03M ÷ 692K = 4.4× | 168 MB |
-| | aqe | 14.5 s (13.3–15.3) | 5.2 s (5.0–5.4) | 24 | 3.14 s / 0.76 s | 4.4× (not split) | 218 MB |
-| | salted | 22.1 s (21.4–22.5) | 9.2 s (9.2–9.7) | 24 | 3.36 s / 1.99 s | 3.40M ÷ 2.82M = 1.2× | 1.5 GB |
+|  | aqe | 14.3 s (14.0–15.3) | 4.7 s (4.2–5.1) | 200 | 0.89 s / 0.11 s | 96.8K ÷ 94.7K = 1.02× | 0 |
+|  | salted | 21.6 s (18.5–25.9) | 7.4 s (5.7–10.1) | 200 | 1.27 s / 0.14 s | 352K ÷ 350K = 1.01× | 0 |
+| Hot key, 200 partitions | naive | 15.6 s (14.9–17.1) | 5.8 s (5.6–7.5) | 200 | 1.79 s / 0.10 s | 2.42M ÷ 83.0K = 29× | 100 MB |
+|  | aqe | 14.4 s (13.5–14.4) | 4.1 s (4.0–4.3) | 206 | 0.73 s / 0.09 s | 444K ÷ 83.0K = 5.35× | 0 |
+|  | salted | 20.0 s (19.7–23.5) | 6.7 s (6.3–9.4) | 200 | 1.09 s / 0.15 s | 631K ÷ 338K = 1.87× | 0 |
+| Hot key, 24 partitions | naive | 16.2 s (14.3–21.8) | 5.1 s (4.8–6.5) | 24 | 3.10 s / 0.67 s | 3.03M ÷ 692K = 4.37× | 168 MB |
+|  | aqe | 14.5 s (13.3–15.3) | 5.2 s (5.0–5.4) | 24 | 3.14 s / 0.76 s | 3.03M ÷ 692K = 4.37× | 218 MB |
+|  | salted | 22.1 s (21.4–22.5) | 9.2 s (9.2–9.7) | 24 | 3.36 s / 1.99 s | 3.40M ÷ 2.82M = 1.21× | 1.5 GB |
 
 What this shows:
 - **Real keys need no skew handling.** Partitions are within 2% of each other, AQE finds nothing to split, and salting only adds cost: it copies `item_daily` 8× (7.3M → 58M rows), so each task reads 3.7× more records and the run takes 56% longer.
@@ -1016,14 +1016,14 @@ The timeline is drawn from `benchmarks/results/skew_tasks.csv` (each task's exec
 
 ### Spark vs. pandas (KuaiRand-1K, ingest + clean + feature subset)
 
-1 warm-up and 3 timed runs per configuration; medians, with timed-run min–max ranges in parentheses for both engines. Silver rows are the cleaned events; both engines produced the same counts at every size they finished. Data: `benchmarks/results/pandas_*.csv` and `pandas_spark_*.csv`.
+1 warm-up and 3 timed runs per configuration; medians, with timed-run min–max ranges in parentheses for both engines. The samples hold 105, 267 and 503 of the 1,000 users. Silver rows are the cleaned events; both engines produced the same counts at every size they finished. Data: `benchmarks/results/pandas_*.csv` and `pandas_spark_*.csv`.
 
 | Size | Events in → silver | Spark (3 executors, 1 GiB heap each) | pandas, 7.5 GiB limit | pandas, 2.5 GiB limit | Outputs |
 |---|---|---|---|---|---|
-| 10% (105 users) | 1.18M → 1.17M | 20.7 s (20.6–20.9) | 1.6 s (1.6–1.7), peak 1.8 GiB | 1.7 s (1.7–1.7), peak 1.9 GiB | matched within tolerance |
-| 25% (267 users) | 2.94M → 2.92M | 27.1 s (25.5–27.4) | 4.3 s (3.4–4.5), peak 3.2 GiB | **out of memory** | matched within tolerance |
-| 50% (503 users) | 5.89M → 5.84M | 39.1 s (37.7–39.1) | 8.6 s (8.5–8.7), peak 5.0 GiB | skipped | matched within tolerance |
-| 100% (1,000 users) | 11.76M → 11.65M | 67.0 s (65.8–67.4) | **out of memory** after 12 s | skipped | Spark only |
+| 10% | 1.18M → 1.17M | 20.7 s (20.6–20.9) | 1.6 s (1.6–1.7), peak 1.8 GiB | 1.7 s (1.7–1.7), peak 1.9 GiB | matched within tolerance |
+| 25% | 2.94M → 2.92M | 27.1 s (25.5–27.4) | 4.3 s (3.4–4.5), peak 3.2 GiB | out of memory after 2.2 s | matched within tolerance |
+| 50% | 5.89M → 5.84M | 39.1 s (37.7–39.1) | 8.6 s (8.5–8.7), peak 5.0 GiB | skipped | matched within tolerance |
+| 100% | 11.76M → 11.65M | 67.0 s (65.8–67.4) | out of memory after 12.4 s | skipped | Spark only |
 
 The two out-of-memory results above were recorded when the driver still inferred an OOM kill from exit code 137 alone; those containers were removed automatically, so their cause cannot be checked after the fact. After the driver switched to Docker's `OOMKilled` flag, both configurations were run again: Docker reported `OOMKilled=true` for 25% at 2.5 GiB (after 2.4 s) and 100% at 7.5 GiB (after 8.2 s), while a 10% control run at 2.5 GiB succeeded. That shows these configurations reproduce an OOM kill; it does not retroactively confirm the original runs.
 
@@ -1058,17 +1058,17 @@ What this shows:
 
 ### Spark UI evidence
 
-History Server pages of the skew benchmark's hot-key runs at 200 partitions (timed run 3, the same run as the timeline above), captured with headless Chrome.
+History Server pages of the skew benchmark's hot-key runs at 200 partitions, captured with headless Chrome. They show run 3 of each variant, the second timed run (run 1 is the warm-up), the same runs as the timeline above. Each metric in the Spark UI's summary table has its own distribution, so maxima for different metrics may come from different tasks.
 
 **Naive join, physical plan.** Both sides are shuffled into 200 partitions and sorted for a SortMergeJoin; broadcast is off. The events side's Sort spilled 392 MiB in a single task, the one holding the hot key, while the median task spilled nothing.
 
 ![Spark UI: SQL plan of the naive hot-key join](docs/img/spark-ui-sql-naive.png)
 
-**Naive join, join stage.** 200 tasks: the median task read 82,998 shuffle records in 76 ms, the slowest read 2,416,365 records, took 2 s and spilled 95.1 MiB to disk.
+**Naive join, join stage.** 200 tasks: the median shuffle read was 82,998 records, and the median executor run time was 76 ms. One task held the hot key: it read the most records (2,416,365), was the slowest (1.79 s; 2 s in the summary) and spilled 95.1 MiB to disk.
 
 ![Spark UI: naive join stage summary metrics](docs/img/spark-ui-stage-naive.png)
 
-**AQE skew join, join stage.** 206 tasks: AQE split the hot partition, so the slowest task read 444,146 records and took 0.6 s, and no task spilled.
+**AQE skew join, join stage.** 206 tasks, and no task spilled. AQE split the hot partition, so the largest shuffle read fell to 444,146 records; that task took 0.36 s. The slowest task was a different one: it read 83,754 records and took 0.75 s, of which 642 ms was executor run time (the summary's Duration row reports executor run time, hence 0.6 s).
 
 ![Spark UI: AQE join stage summary metrics](docs/img/spark-ui-stage-aqe.png)
 

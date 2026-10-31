@@ -5,7 +5,8 @@
 The Spark UI's event timeline only renders after a click, so it cannot be
 captured as a plain screenshot. This reads the same data (each task's executor,
 start, duration and shuffle records) from the History Server for one timed run
-of the hot-key scenario's naive and AQE variants, and writes
+of the hot-key scenario's naive and AQE variants (by default run 3, the second
+timed run: run 1 is the warm-up), and writes
 benchmarks/results/skew_tasks.csv, so benchmarks/plots.py can draw it from
 saved data. Needs the cluster and the History Server's event logs of that run.
 """
@@ -46,7 +47,8 @@ def task_rows(stage: dict, run: int, fetch=common._fetch_json) -> list:
 
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--run", type=int, default=3, help="timed run number in skew_stages.csv")
+    parser.add_argument("--run", type=int, default=3,
+                        help="run number as in skew_stages.csv, where run 1 is the warm-up")
     parser.add_argument("--results-dir", type=Path, default=common.RESULTS_DIR)
     args = parser.parse_args(argv)
     with (args.results_dir / "skew_stages.csv").open() as handle:
