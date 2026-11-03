@@ -1,8 +1,16 @@
 # Budget, recording, evidence, and teardown
 
-**Deployment mode:** one temporary student-portfolio AWS session. **User target:** less than **$10 total**, followed by teardown and no ongoing hosted service. **Status:** planned runbook; no resources or charges have been created by this documentation.
+**Deployment mode:** one temporary recent-graduate portfolio AWS session on the confirmed **Free plan**. **User target:** less than **$10 total gross service usage**, including credit-funded usage, followed by teardown and no ongoing hosted service. **Status:** planned runbook; no resources or charges have been created by this documentation.
 
-This document is a release constraint for [checkpoints 7.10–7.12](checkpoints.md), not a promise that a cloud provider will enforce a $10 account spending ceiling. Prices, account quotas, existing account usage, taxes, traffic, retries, and resources that fail to delete affect the bill. AWS Budgets notifications use delayed billing data and are not a real-time circuit breaker. [AWS budget guidance](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html)
+This document is a release constraint for [checkpoints 7.10–7.12](checkpoints.md). The Free plan's provider controls do not enforce our smaller $5 project allowance. Prices, account quotas, other account usage, taxes, traffic, retries, and resources that fail to delete affect metered usage and remaining credits. AWS Budgets notifications use delayed billing data and are not a real-time project circuit breaker. [AWS budget guidance](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html)
+
+### Funding and credit policy
+
+The user reports a new account with **$100 initial Free Tier credits** and confirms the **Free plan**. This balance has not been independently checked. The project will preserve most of those credits: its normal usage allowance remains **$5**, with the existing **$9 envelope including reserves**. Receiving credits does not authorize a larger run, more training attempts, or a Paid-plan upgrade.
+
+Before deploying, verify the actual available balance, expiration date, selected region, eligible services, and permissions in that account. Keep separate ledger columns for **gross usage**, **credits applied**, **remaining credits**, and **cash charges**. Aim for zero out-of-pocket cost for eligible credit-covered usage, without representing promotional credit as cash or subtracting it from the gross usage limit. [AWS plan comparison](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html)
+
+The new signup service list places **AWS Glue on the Free plan** and **Amazon EMR on the Paid plan**. This plan therefore proposes a bounded Glue Spark ETL job; actual job/API/quota access remains an account preflight gate. Do not activate Paid plan or advanced features to bypass a failed check. Local rehearsal can continue while any service-access issue is resolved. [AWS service availability](https://docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html)
 
 ## 1. Work locally, pay only for the final proof
 
@@ -23,8 +31,8 @@ These are proposed implementation limits. They must be enforced in configuration
 | Data | Seeded fixture around 100 users/100 items/10,000 mature impressions; exact size fixed after local rehearsal |
 | Training input | At most 50 MiB staged per training run; bounded files/rows and checked uncompressed size |
 | Artifacts | Model bundle at most 10 MiB; total live dataset/artifact object storage target below 1 GiB |
-| Spark | One EMR job; one 1-vCPU/2-GB driver plus one 1-vCPU/2-GB executor; proposed application ceiling 2 vCPU/4 GB |
-| Spark lifetime | At most 15 minutes execution; no initial/preinitialized capacity; explicit auto-stop |
+| Spark | One Glue Spark ETL job; two `G.1X` workers = 2 DPUs (nominal 8 vCPU/32 GB total); candidate runtime pinned to Glue 5.0 |
+| Spark lifetime | 15-minute timeout; `STANDARD` execution, zero automatic retries, concurrency one, queuing disabled; no auto-scaling or notebook sessions |
 | Training | One CPU training invocation, proposed 4 GiB/600 seconds/3–5 epochs; smaller settings if account quotas or local profiling require it |
 | Model requests | At most 1,000 ranking requests; at most 200 candidates and 20 results per request |
 | Other API traffic | At most 5,000 calls including polling/retries; pause polling when a tab is hidden or a job is terminal |
@@ -34,21 +42,21 @@ These are proposed implementation limits. They must be enforced in configuration
 | Static/media delivery | Small selected clips/assets, target below 1 GiB of AWS-served download traffic; no video transcoding or bulk media import |
 | Runtime | Standard on-demand Lambda; no provisioned concurrency, managed-instance fleet, paid warm pool, or idle Spark workers |
 
-The Spark heap plus memory overhead must fit the selected worker size; 2 GB of worker memory is not 2 GB of usable Spark heap. Set driver/executor settings explicitly, pin one executor, and verify the chosen EMR release supports the configuration. EMR bills workers while allocated and has a minimum billable duration; it also charges for preinitialized capacity if configured. [EMR pricing](https://aws.amazon.com/emr/pricing/)
+Glue Spark ETL uses different worker sizes from the earlier EMR proposal. Two `G.1X` workers allocate 2 DPUs; do not carry the old 2-vCPU/4-GB EMR ceiling into this profile. Use explicit worker count and the supported pinned runtime, and verify one job can run all stages. Glue's small Python-shell option is not Spark, and the fractional `G.025X` worker is for streaming, not this batch job. [Glue job configuration](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-jobs-job.html)
 
 New AWS accounts can have reduced Lambda memory/concurrency quotas. Check the intended account before relying on 4 GiB training memory or reserved concurrency. Lambda's normal function duration limit is 15 minutes; the proposed 600-second training timeout is deliberately lower. [Lambda quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)
 
-If the rehearsed fixture does not fit, reduce the fixture/settings and update the contract evidence. Do not automatically add Fargate, a GPU, a larger EMR cluster, or a permanently warm inference endpoint.
+If the rehearsed fixture does not fit, reduce the fixture/settings and update the contract evidence. Do not automatically add Fargate, a GPU, additional Glue workers, or a permanently warm inference endpoint.
 
 ## 3. Cost preflight and reserve
 
-Use standard on-demand rates for the selected region and architecture. **Assume zero Free Tier credits and zero promotional credits** when deciding whether to launch. Actual credits can reduce the final bill, but they are not a design dependency. Avoid commitments, subscriptions, paid domains, and recurring purchases. In particular, choose **CloudFront pay-as-you-go, with no flat-rate plan**: a subscribed distribution cannot be deleted until that plan has been cancelled and its current billing cycle ends. [CloudFront deletion requirements](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/HowToDeleteDistribution.html)
+Calculate gross usage using standard on-demand rates before applying any Free Tier allowance or promotional credits. Then record eligible credits separately using the verified account balance. Preserve the under-$10 gross target even if credits cover the whole run. Avoid commitments, subscriptions, paid domains, and recurring purchases. In particular, choose **CloudFront pay-as-you-go, with no flat-rate plan**: a subscribed distribution cannot be deleted until that plan has been cancelled and its current billing cycle ends. [CloudFront deletion requirements](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/HowToDeleteDistribution.html)
 
 The following is a conservative **allocation worksheet**, not an AWS quote or a measured bill. Fill in actual rates and expected usage before checkpoint 7.11.
 
 | Category | Initial allowance | What the estimate must include |
 |---|---:|---|
-| Bounded EMR run | $1.00 | All driver/executor billed time, initialization/idle time, any billable disk, and finite retries |
+| Bounded Glue run | $1.00 | Two-worker DPU usage, billable startup/runtime, temporary storage and ancillary requests; no automatic job retries |
 | All Lambda functions | $0.75 | API, ranker initialization and scoring, training, stream/reconciliation handlers, auth work, and allocated ephemeral storage |
 | HTTP/workflow/identity | $0.50 | API Gateway, Step Functions transitions/retries, Cognito usage/features; disable SMS and unneeded paid options |
 | Object/database/registry storage | $0.75 | S3 requests/versions, DynamoDB units/indexes/transactions/Streams consumers, ECR images, and any bootstrap state storage |
@@ -68,19 +76,19 @@ As of November 2, 2026, a reasonable planning range for a successful tiny AWS re
 
 | Example component | Assumed use | Illustrative cost before other services |
 |---|---|---:|
-| EMR Serverless compute | 2 vCPU + 4 GB for 15 minutes | About $0.032 |
+| Glue Spark ETL compute | 2 DPUs for 15 billable minutes | About $0.220 |
 | CPU training Lambda | 4 GB for 600 seconds, once | About $0.040 |
 | Inference Lambda | 1,000 requests × 2 GB × 2 seconds | About $0.067 |
 | HTTP API | 5,000 small metered calls | About $0.005 |
 
-These examples use US East pricing: AWS publishes EMR example rates of `$0.052624/vCPU-hour` and `$0.0057785/GB-hour`, Lambda x86 compute at `$0.0000166667/GB-second`, and an HTTP API example at `$1/million` calls. The assumed inference duration is not measured; initialization, dispatcher/API functions, retries, workflows, DynamoDB, identity, images, storage, logs, and delivery add to these component values. [EMR rate example](https://docs.aws.amazon.com/solutions/latest/scene-intelligence-with-rosbag-on-aws/cost.html), [Lambda pricing](https://aws.amazon.com/lambda/pricing/), [API Gateway pricing](https://aws.amazon.com/api-gateway/pricing/)
+These examples use published regional examples: Glue Spark ETL at `$0.44/DPU-hour` gives `2 × 0.25 × $0.44 = $0.22`; Lambda x86 compute is illustrated at `$0.0000166667/GB-second`, and HTTP API at `$1/million` small calls. Reconfirm rates for the selected region. The assumed inference duration is not measured; initialization, dispatcher/API functions, retries, workflows, DynamoDB, identity, images, storage, logs, and delivery add to these component values. The former EMR component estimate is superseded by this Free-plan Glue proposal. [Glue pricing](https://aws.amazon.com/glue/pricing/), [Lambda pricing](https://aws.amazon.com/lambda/pricing/), [API Gateway pricing](https://aws.amazon.com/api-gateway/pricing/)
 
 The local build requires **no additional paid development software** under this plan, assuming an existing capable computer, internet connection, and development tools. Developer time, electricity, existing subscriptions, and any separately metered AI assistance are excluded. No hired-developer or labor estimate is included. After every project resource is removed, the target recurring AWS charge is **$0**; previously incurred charges can still appear later as billing settles.
 
 ### Calculations to record
 
 - Lambda: `sum(invocations × billed seconds × configured GB × regional GB-second rate)` plus requests, initialization behavior, extra ephemeral storage, and any explicitly enabled feature charges. Billed duration includes cold-start work as applicable; use measurements rather than counting only forward-pass time.
-- EMR: aggregate **billed** vCPU-hours and memory-hours × current regional rates, plus billable storage/initial capacity. Record `billedResourceUtilization` after the run where available; an execution timeout is not the same as an exact billable-duration limit.
+- Glue: total billed DPU-hours × the current regional rate, plus temporary S3 storage, requests, and logs. Record worker type/count, execution class, duration, actual job runs, and `DPUSeconds` where provided; otherwise calculate from the billable run records. A job timeout is not a guarantee of an exact final billable duration.
 - API Gateway: metered request units × regional rate plus transfer; upload bulk data directly to scoped S3 rather than through an API body.
 - Step Functions: actual Standard-workflow transitions, including retries and error paths, × regional rate.
 - DynamoDB: actual read/write units including item-size, transactional, consistency, and index multipliers; storage and selected optional features separately. Do not count a transaction as a single ordinary write.
@@ -103,16 +111,16 @@ Save the price date, region, selected service options, rates, input quantities, 
 1. **Prevent unintended launches.** Ordinary CI checks never apply infrastructure or start a model run. Cloud delivery is a deliberate manual operation targeting the reviewed account/region.
 2. **Bound expensive work.** Enforce data size, model settings, one active job, stable execution identity, fixed capacity, job timeout, workflow timeout, and finite retries. A browser refresh must not create a new training job.
 3. **Bound public use.** Disable public registration and training; narrow demo routes; set gateway throttles, application request budgets, expiry, and an immediate disable switch. These controls reduce exposure but do not create a dollar-accurate hard cap.
-4. **Avoid idle resources.** The primary plan creates no NAT gateway, ALB, RDS database, GPU, ECS service, provisioned Lambda concurrency, EMR initial capacity, paid custom domain, or persistent paid cache. Avoid placing Lambda/EMR in a VPC when same-region managed service endpoints suffice for this workload.
+4. **Avoid idle resources.** The primary plan creates no NAT gateway, ALB, RDS database, GPU, ECS service, provisioned Lambda concurrency, Glue interactive session, paid custom domain, or persistent paid cache. Use S3-only Glue inputs/outputs with no VPC connection in this profile. Do not add crawlers, schedules, paid data-quality/anomaly extras, or notebook sessions for the recording.
 5. **Keep telemetry small.** Do not log bodies, datasets, feature arrays, tokens, or per-item model internals. Cap local load generation and use low-volume structured logs.
-6. **Stop independently.** Prepare a tested stop command that disables new jobs/demo mutations, turns off stream/schedule triggers as needed, and cancels active workflows and EMR jobs. A timed stop can supplement it but must be scoped and tested; it cannot replace supervised teardown.
+6. **Stop independently.** Prepare a tested stop command that disables new jobs/demo mutations, turns off stream/schedule triggers as needed, and stops active workflows and Glue job runs. A timed stop can supplement it but must be scoped and tested; it cannot replace supervised teardown.
 7. **Track time and estimated use directly.** The session owner watches the wall clock and launched work. Do not wait for a billing alert before stopping. A small budget alert can provide additional notification; confirm any selected alert/action feature's cost.
 
 Set a stop decision when the estimated consumed-plus-unfinished usage reaches the $5 planned-usage envelope, when an unplanned resource appears, or when the four-hour session window is reached. Preserve evidence and tear down rather than broadening the deployment.
 
-## 5. Local rehearsal before the paid session
+## 5. Local rehearsal before the cloud session
 
-Rehearse the exact recording script against the same API/domain code, model format, and fixture generator. The local transport/storage/workflow adapters must identify where cloud semantics differ; real Cognito authorization, IAM, S3 policies, Lambda initialization, and EMR execution are verified during the paid proof.
+Rehearse the exact recording script against the same API/domain code, model format, and fixture generator. The local transport/storage/workflow adapters must identify where cloud semantics differ; real Cognito authorization, IAM, S3 policies, Lambda initialization, and Glue execution are verified during the credit-funded AWS proof. Preflight does not activate a Paid plan.
 
 The rehearsal should produce:
 
@@ -141,7 +149,7 @@ Prepare two complementary recordings or one recording with chapter markers. Edit
 
 ### Engineering walkthrough — approximately 5–8 minutes
 
-Show the project boundary, an invalid upload, an unauthorized request, one real feature/training job, immutable dataset/model identity, measured evaluation with synthetic-data disclosure, exact serving version, deliberate rollback, and a few sanitized logs/request IDs. Mention the chosen limits and why a serverless recording deployment fits the student budget. Do not spend the recording navigating unrelated AWS consoles.
+Show the project boundary, an invalid upload, an unauthorized request, one real feature/training job, immutable dataset/model identity, measured evaluation with synthetic-data disclosure, exact serving version, deliberate rollback, and a few sanitized logs/request IDs. Mention the chosen limits and why a serverless recording deployment fits the small portfolio budget. Do not spend the recording navigating unrelated AWS consoles.
 
 The footage must never expose a reusable API key, password, session token, presigned URL, Terraform state, or secret-bearing terminal environment. Use a masked display and a prepared test client; revoke test credentials at the end. Display sample commands with placeholders when a raw credential would otherwise enter the recording.
 
@@ -159,7 +167,7 @@ Keep small, reviewed artifacts in `docs/evidence/phase-7/` when implemented. Kee
 | Data/model report | Synthetic/historical provenance, dataset/model digests, evaluation method and results, active version/rollback |
 | API evidence | Sanitized request/response examples, error contract, isolation and idempotency results |
 | UI evidence | Desktop/mobile/keyboard screenshots and real loading/error/failure states |
-| Cost record | Preflight quantities/rates, resource utilization, provisional versus settled charges, credits/taxes treatment |
+| Cost record | Preflight quantities/rates, resource utilization, gross usage, credits applied, remaining credits, cash charges, and provisional versus settled amounts |
 | Teardown record | Planned resource list, actual inventory, removals, exceptions, timestamps, follow-up billing check |
 
 Open the exported recording and verify the manifests/reports locally **before** removing their cloud source. A recording with a wrong model version or unsupported claim is not repaired by a successful Terraform teardown.
@@ -175,9 +183,9 @@ Replace every bracketed field with observed evidence. State the final cost only 
 Implement scoped inventory/export/stop/destroy scripts during checkpoint 7.10. Do not paste broad account-wide delete commands into a demo runbook. Every deletion targets this environment's known resource identifiers and tags.
 
 1. **Freeze new work.** Disable job starts and public-demo mutations, revoke integration test keys, and stop browser polling/recording clients.
-2. **Stop active work.** Stop workflow executions, explicitly cancel EMR jobs, stop the EMR application, and disable event-source mappings/reconciliation schedules. Stopping an orchestration execution does not cancel an already-running synchronous Lambda invocation; wait for training/ranking/worker invocations to finish or reach their configured timeouts before removing the S3/DynamoDB resources they use. Inspect downstream work directly rather than assuming it has stopped.
+2. **Stop active work.** Stop workflow executions, explicitly stop Glue job runs and verify their terminal states, and disable event-source mappings/reconciliation schedules. Stopping an orchestration execution does not cancel an already-running synchronous Lambda invocation; wait for training/ranking/worker invocations to finish or reach their configured timeouts before removing the S3/DynamoDB resources they use. Inspect downstream work directly rather than assuming it has stopped.
 3. **Export evidence.** Verify local recordings, sanitized logs, dataset/model manifests, cloud job resource utilization, and deployment configuration. Keep a private copy of Terraform state until inventory is clear.
-4. **Remove application resources.** Delete API routes/stages, Lambda functions/versions/layers as applicable, Cognito test resources, workflows, EMR applications, queue/dead-letter resources, and the DynamoDB tables/Streams consumers created for the session.
+4. **Remove application resources.** Delete API routes/stages, Lambda functions/versions/layers as applicable, Cognito test resources, workflows, Glue job definitions/session-created catalog metadata if any, queue/dead-letter resources, and the DynamoDB tables/Streams consumers created for the session.
 5. **Remove storage and delivery.** Disable/delete the CloudFront distribution; remove S3 objects, versions, delete markers, failed multipart uploads, and ECR images/repositories for the environment. Deletion may require waiting for dependent resources to finish propagating.
 6. **Remove supporting resources.** Remove this environment's log groups, alarms, schedules, IAM policies/roles, and any backup/export resources. Check the chosen topology did not accidentally create NAT, endpoints, public IPv4 allocations, or other unexpected billable resources.
 7. **Finish bootstrap cleanup.** Remove only session-created state buckets/locks and OIDC/bootstrap resources that are not shared with another project. If any resource is intentionally retained, document why, its billing behavior, and its owner; it is not silently treated as deleted.
@@ -191,7 +199,7 @@ Terraform state and provider credentials can contain sensitive configuration. St
 | Problem | Response |
 |---|---|
 | Preflight estimate plus reserve cannot target under $10 | Reduce assets/data/work or keep the presentation local; do not launch an unbounded estimate |
-| EMR/Lambda quota or dependency mismatch | Stop before the recording run, preserve the error, adjust locally; no automatic paid upgrade |
+| Glue/Lambda service access, quota, or dependency mismatch | Stop before the recording run, preserve the error, adjust locally; no automatic plan upgrade or advanced-feature activation |
 | Model cold start exceeds the HTTP integration limit | Show honest unavailable/loading behavior, document the result, and return to local design work |
 | Training reaches its timeout | Record failure and stop; do not automatically launch another full run |
 | Browser times out while a workflow continues | Inspect durable job/execution identity and reconcile before any retry |

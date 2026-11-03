@@ -2,7 +2,7 @@
 
 **Status:** All implementation checkpoints below are planned. The phase documentation exists; the application and AWS work described here has not been performed.
 
-Read the [phase brief](README.md), [architecture](architecture.md), [data/ML contracts](data-and-ml-contracts.md), [frontend plan](frontend-and-demo.md), and [budget runbook](budget-and-recording.md) together. The user-approved constraint is **less than $10 total AWS spend**, one recording session, then teardown. Checkpoints 7.1–7.10 are local work; infrastructure documents and plans do not authorize an unattended cloud deployment.
+Read the [phase brief](README.md), [architecture](architecture.md), [data/ML contracts](data-and-ml-contracts.md), [frontend plan](frontend-and-demo.md), and [budget runbook](budget-and-recording.md) together. The user-approved constraint remains **less than $10 total gross AWS usage**, one recording session, then teardown. The reported $100 credits on a new Free-plan account fund eligible usage without increasing this project allocation. The proposed cloud Spark path now uses AWS Glue instead of Paid-plan EMR, subject to account preflight. Checkpoints 7.1–7.10 are local work; infrastructure documents and plans do not authorize an unattended cloud deployment or account-plan upgrade.
 
 ## How to use a checkpoint
 
@@ -121,19 +121,19 @@ Build:
 
 1. Add a platform data adapter and feature spec. Existing KuaiRand-specific schemas, date ranges, and metadata cannot simply be reused for arbitrary customer catalogs.
 2. Retain chronological splits, train-only encoders/scalers, bounded prior history, and mature exposure labels. Define event-time/arrival-time policy and apply the same policy to training and serving.
-3. Add a packaged Spark entry point with explicit project/dataset/run/config arguments. The recorded cloud workflow must execute its platform stages in one bounded EMR job, instead of assuming `docker exec namenode` or HDFS exists on EMR Serverless. Package Python modules and dependencies in advance; a non-VPC EMR worker must not depend on fetching arbitrary external package indexes at runtime. If one job cannot support the stages, revisit the workflow and budget before deployment.
+3. Add a packaged Spark entry point with explicit project/dataset/run/config arguments. The recorded cloud workflow must execute its platform stages in one bounded AWS Glue Spark ETL job instead of assuming `docker exec namenode` or HDFS exists. Package Python modules and compatible dependencies in S3 in advance; do not depend on fetching arbitrary external package indexes at runtime. If one job cannot support the stages, revisit the workflow and budget before deployment.
 4. Write to immutable run prefixes and publish a completion manifest only after all expected files, row counts, feature metadata, and digests pass checks. S3 prefix rename is not an atomic commit protocol.
-5. Prepare a small EMR release/configuration profile: a proposed one-driver/one-executor 2-vCPU/4-GB total ceiling, no preinitialized workers, a 15-minute job timeout, and explicit auto-stop. Validate usable Spark heap plus overhead against actual worker limits.
+5. Prepare the proposed Glue profile: `glueetl`, a pinned candidate Glue 5.0 runtime, two `G.1X` workers (2 DPUs; nominal 8 vCPU/32 GB total), `STANDARD` execution, 15-minute timeout, `MaxRetries=0`, `MaxConcurrentRuns=1`, and job-run queuing disabled. Do not enable auto-scaling, scheduled crawlers, or notebook/interactive sessions. Rehearse compatibility with Glue's Spark/Python versions; the old EMR 2-vCPU/4-GB profile does not apply.
 
 Verify:
 
 - Local fixture outputs pass schema, row-count, split, leakage, repeatability, and label-maturity checks.
 - A partially written prefix is never selectable as a ready dataset; retries cannot overwrite a published version.
-- Original research paths remain runnable, and package/dependency/Python/Spark version compatibility is recorded for the chosen EMR release.
+- Original research paths remain runnable, and package/dependency/Python/Spark version compatibility is recorded for the selected Glue release.
 
 **Artifacts:** Platform Spark entry point, storage/config adapter, package manifest, fixture gold outputs, and a documented cloud resource envelope.
 
-**Exit:** The local canonical dataset is correct, the S3 publish protocol is tested, and one future EMR invocation is fully specified. Cloud execution waits until 7.11.
+**Exit:** The local canonical dataset is correct, the S3 publish protocol is tested, and one future Glue invocation is fully specified. Cloud execution waits until 7.11 and the Free-plan service/permission/credit preflight.
 
 ## 7.6 — Package training, evaluation, and artifact registration
 
@@ -230,12 +230,12 @@ Verify:
 
 Build:
 
-1. Add Terraform for the chosen serverless environment: private S3/CloudFront UI, API Gateway HTTP API, Cognito, scoped Lambda functions, DynamoDB on-demand/Streams, ECR, Step Functions, bounded EMR Serverless, and limited logs. Use CloudFront pay-as-you-go without a flat-rate subscription so the distribution can be removed during teardown. Add a dead-letter queue only for defined failure handling.
+1. Add Terraform for the chosen Free-plan serverless environment: private S3/CloudFront UI, API Gateway HTTP API, Cognito, scoped Lambda functions, DynamoDB on-demand/Streams, ECR, Step Functions, one bounded Glue job, and limited logs. Use CloudFront pay-as-you-go without a flat-rate subscription so the distribution can be removed during teardown. Add a dead-letter queue only for defined failure handling; do not create a Paid-plan/advanced-features bootstrap.
 2. Configure scoped IAM, GitHub OIDC trust limited to the deployment repository/environment/ref, and separate read/plan/apply/evidence/destroy capabilities. Avoid static AWS access keys in CI.
 3. Create local image/build/package workflows and a manual cloud delivery workflow; ordinary pushes run checks without applying infrastructure or training models.
-4. Add expiry, application quotas, workflow/job timeouts, reconciliation limits, no provisioned concurrency or initial EMR capacity, and short log retention. Implement an independently invokable session stop procedure; an optional timed stop is defense in depth, not a billing guarantee.
+4. Add expiry, application quotas, workflow/job timeouts, reconciliation limits, no provisioned concurrency or idle Glue interactive sessions, and short log retention. Implement an independently invokable session stop procedure; an optional timed stop is defense in depth, not a billing guarantee.
 5. Write evidence export and resource inventory/teardown scripts. Verify state files, credentials, raw datasets, model weights, and unredacted logs remain ignored before generating them.
-6. Fill the regional price/usage worksheet with current rates, deployment overhead, anticipated requests, taxes, and a reserve. Validate new-account quotas without assuming Free Tier credits.
+6. Fill the regional price/usage worksheet with current rates, deployment overhead, anticipated requests, taxes, and a reserve. Verify the reported credit balance/expiry and eligible-service coverage in the intended Free-plan account, together with Glue/Lambda quotas and the required IAM operations. Estimate gross usage before applying credits; an available $100 balance does not raise the $5 normal usage allowance.
 
 Verify:
 
@@ -255,7 +255,7 @@ Build/run:
 
 1. Choose the intended account/region, record the current price/usage worksheet, and confirm the one-session resource plan. Start the session timer when cloud resources are created, not when filming begins.
 2. Deploy the verified images and infrastructure. Create only the test identities/projects and tiny dataset; keep expensive endpoints owner-controlled and public training disabled. Seed the trusted, locally trained version A with its declared provenance.
-3. Verify HTTPS, authorization, upload validation, one bounded EMR feature build, one small training/evaluation run producing version B, exact-version inference, promotion to B and rollback to A, and the shared-API feed. The recording distinguishes the local seed from the new AWS-trained version.
+3. Verify HTTPS, authorization, upload validation, one bounded Glue Spark feature build, one small training/evaluation run producing version B, exact-version inference, promotion to B and rollback to A, and the shared-API feed. The recording distinguishes the local seed from the new AWS-trained version.
 4. Record a short product tour plus a deeper engineering walkthrough. Capture sanitized request/version IDs, job timing, feature/model manifests, cold/warm behavior, and representative failure evidence.
 5. Use the session stop procedure when finished or when a gate fails. Target at most four hours from first creation to stop/teardown start; infrastructure deletion and residual-cost review must still be followed through to completion.
 
@@ -275,11 +275,11 @@ Verify:
 
 Build/run:
 
-1. Disable public ingress/demo mutation and new job starts, cancel/stop active executions and EMR jobs, and drain or disable background triggers. Verify no initialization capacity remains.
+1. Disable public ingress/demo mutation and new job starts, stop active executions and Glue job runs, and drain or disable background triggers. Verify no interactive sessions or scheduled compute remain.
 2. Download and verify the recordings, safe result summaries, configuration/manifests, and required logs before deleting their cloud copies. Revoke test API keys and discard test identities during teardown.
 3. Destroy the environment, including object versions, images, distributions, log groups, alarms, queues, tables/backups, and any bootstrap state resources. Preserve state locally outside Git until cleanup has been verified, then follow the state-retention decision.
 4. Inspect the intended account/region and any global resources; compare inventory against the deployment resource list. Retry failed removals deliberately and record the reason for any remaining resource.
-5. Reconcile delayed billing/usage, including taxes and ancillary services, against the under-$10 target. Record final versus pending charges; a successful `destroy` command alone does not prove the final bill.
+5. Reconcile delayed billing/usage, including taxes and ancillary services, against the under-$10 gross target. Report service usage, credits applied, remaining credit balance, and any cash charges separately. Record final versus pending charges; a successful `destroy` command alone does not prove the final bill or credit consumption.
 6. Finish the root README, architecture screenshots, recording link, short case study, relevant measured results, tradeoffs, and known limitations. Keep bulk video out of the source tree when a GitHub release/attachment or external recording link is more suitable; publication is a separate explicit step.
 
 Verify:

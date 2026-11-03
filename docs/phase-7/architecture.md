@@ -1,6 +1,6 @@
 # Phase 7 — AWS architecture and backend design
 
-**Status: proposed; nothing in this document is deployed.** This phase targets a short-lived student portfolio demonstration, one screen recording, and teardown, with total AWS spend intended to remain below **$10**. The architecture must demonstrate sound production engineering within that constraint; it does not claim a permanently available production business.
+**Status: proposed; nothing in this document is deployed.** This phase targets a short-lived recent-graduate portfolio demonstration, one screen recording, and teardown, with total **gross AWS usage intended to remain below $10 before credits**. The user reports a new AWS **Free plan** account with **$100 in credits**. That balance, expiry, and service eligibility have not been verified against the account; the available credit is not the project budget. Keep the $5 planned-usage allowance and $9 allocation including reserve in the budget runbook. No AWS API calls, resource creation, or plan upgrade are performed by this documentation.
 
 AWS capabilities were checked against official documentation on November 2, 2026. Read [the phase brief](README.md), [checkpoints](checkpoints.md), [data/model contracts](data-and-ml-contracts.md), and the controlling [budget and recording plan](budget-and-recording.md) alongside this design. The planning Region is `us-east-1`; verify availability, current prices, and the selected account before any deployment.
 
@@ -24,13 +24,15 @@ The TypeScript backend will be a modular application, divided into project autho
 | Datasets/model artifacts | Private S3 objects plus immutable manifests | Durable versioned inputs and reproducible outputs |
 | Event/job dispatch | DynamoDB transactional outbox and Streams-triggered Lambda | Retryable asynchronous work without an always-running worker |
 | Workflow | Step Functions Standard | Traceable preprocessing/training steps and explicit failure states |
-| Spark | EMR Serverless, one tightly bounded application/job | Real distributed processing evidence with no idle worker capacity |
+| Spark | AWS Glue Spark ETL, one bounded job | Proposed Free-plan-compatible distributed processing with no idle session |
 | CPU training/inference | Separate Python Lambda functions using the same trusted container image | Small model/fixture, bounded duration, no persistent model endpoint |
 | Delivery/evidence | Terraform, local image build, ECR, GitHub Actions OIDC, CloudWatch | Reproducible deployment and retained engineering proof |
 
 HTTP APIs do not provide native API keys, usage plans, or per-client throttling. Developer keys and per-project limits will therefore be application-managed. JWT authorization is available for dashboard routes. These are deliberate design choices, not capabilities to assume from REST API tutorials. [AWS HTTP/REST comparison](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vs-rest.html).
 
-No VPC, NAT gateway, ALB, RDS, Fargate service, EKS, managed Kafka, Redis, provisioned concurrency, custom domain, or cloud image-build service belongs in the primary deployment. AWS documents that non-VPC EMR Serverless jobs can access selected same-Region services including S3 and DynamoDB; there is no HDFS service to migrate into EMR Serverless. [EMR considerations](https://docs.aws.amazon.com/emr/latest/EMR-Serverless-UserGuide/considerations.html).
+AWS lists Glue in the Free Tier of its new sign-up experience without a Glue-specific exclusion, and the published Free Tier project policy includes the `glue:*` service namespace. This supports Glue as the proposed cloud Spark path; it is not proof that a particular account/Region can launch this job. Check the actual plan, permissions, quotas, and credit eligibility before deployment. Glue ETL compute consumes metered usage; the Data Catalog's free metadata allowance does not make Spark jobs free. [Supported services](https://docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html), [published project policies](https://docs.aws.amazon.com/accounts/latest/reference/scps-and-rcps-for-projects.html).
+
+No VPC connection, NAT gateway, ALB, RDS, Fargate service, EKS, managed Kafka, Redis, provisioned concurrency, custom domain, or cloud image-build service belongs in the primary deployment. The initial Glue job reads and writes approved same-Region S3 paths with its job role, using no VPC data-store connection. It does not need HDFS, a crawler, an interactive notebook/session, or a Data Catalog metastore to process these explicit Parquet paths. [Glue Spark job properties](https://docs.aws.amazon.com/glue/latest/dg/add-job.html).
 
 ### Proposed API surface
 
@@ -72,10 +74,10 @@ flowchart TD
     Dispatch --> SF[Step Functions Standard]
     Dispatch --> Data
     SF --> Validate[Validation Lambda]
-    SF --> EMR[Bounded EMR Serverless Spark job]
+    SF --> Glue[Bounded AWS Glue Spark ETL job]
     SF --> Train[Bounded Python training Lambda]
     Validate --> Data
-    EMR --> Data
+    Glue --> Data
     Train --> Data
     Train --> DB
     Ranker --> Data
@@ -122,7 +124,7 @@ validate approved package -> canonicalize -> Spark preprocessing/quality gates
  -> frozen candidate evaluation -> register immutable candidate
 ```
 
-Promotion will remain a separate explicit operation. Step Functions will use the EMR Serverless `.sync` integration and synchronous Lambda invocation, rather than wait for training in an HTTP request. [EMR integration](https://docs.aws.amazon.com/step-functions/latest/dg/connect-emr-serverless.html), [Lambda integration](https://docs.aws.amazon.com/step-functions/latest/dg/connect-lambda.html).
+Promotion will remain a separate explicit operation. Step Functions Standard will use `arn:aws:states:::glue:startJobRun.sync` and synchronous Lambda invocation, rather than wait for processing/training in an HTTP request. Its role needs the applicable `glue:StartJobRun`, `GetJobRun`, `GetJobRuns`, and `BatchStopJobRun` permissions; review generated permissions and restrict job selection to the server-owned definition. The Glue job role separately needs its approved S3/log access. [Glue integration and IAM actions](https://docs.aws.amazon.com/step-functions/latest/dg/connect-glue.html), [Lambda integration](https://docs.aws.amazon.com/step-functions/latest/dg/connect-lambda.html).
 
 Transient retries must be limited and budgeted. Invalid datasets and failed quality checks are terminal until input changes. Failure/cancellation paths will update durable job state and cancel active child work; stopping a workflow alone is not sufficient evidence that every resource stopped. A reconciliation command will compare job rows and provider execution states before recording and teardown.
 
@@ -132,14 +134,17 @@ Transient retries must be limited and budgeted. Invalid datasets and failed qual
 |---|---|
 | Ranker | Candidate memory 2 GiB; model artifact at most 10 MiB; at most 200 candidates/request; no provisioned concurrency |
 | Training | Candidate memory 4 GiB; 600-second function timeout; approved fixture at most 50 MiB; 3–5 epochs; one run |
-| EMR driver | 1 vCPU / 2 GB worker |
-| EMR executor | One 1 vCPU / 2 GB worker; dynamic allocation disabled |
-| EMR application | Maximum 2 vCPU / 4 GB, no pre-initialized workers; job timeout 15 minutes; auto-stop after one idle minute |
+| Glue runtime | Candidate pinned `GlueVersion=5.0`, `Command.Name=glueetl`: Spark 3.5.4, Python 3.11, Java 17 |
+| Glue workers | `WorkerType=G.1X`, `NumberOfWorkers=2`: 2 DPU, nominally 8 vCPU / 32 GB total; no autoscaling |
+| Glue run controls | `ExecutionClass=STANDARD`, `Timeout=15` minutes, `MaxRetries=0`, `MaxConcurrentRuns=1`, `JobRunQueuingEnabled=false` |
+| Spark job count | One entry point executes all platform stages in one Glue job; no crawler, notebook, interactive session, or second automatic run |
 | Hosted session | Target at most four hours from first resource creation to stop/teardown start; verify deletion afterwards, including propagation delays |
 
-These are release bounds, not measurements already achieved. Worker memory must include Spark heap, Python, and overhead: a candidate 1 GB heap plus at least 384 MiB overhead must fit a supported 2 GB worker and pass the chosen release's validation. Pin the actual EMR release and Python dependencies, then test the fixture locally. [EMR worker sizes](https://docs.aws.amazon.com/emr/latest/EMR-Serverless-UserGuide/app-behavior.html), [one-minute minimum auto-stop](https://docs.aws.amazon.com/emr-serverless/latest/APIReference/API_AutoStopConfig.html).
+These are release bounds, not measurements already achieved. Glue manages its worker layout; the former 2-vCPU/4-GB application profile does not apply. Two G.1X workers provide the proposed minimum 2-DPU batch job. The fractional G.025X worker is for streaming and is not a cheaper substitute for this Spark ETL job. Explicitly set workers, timeout, and zero automatic retries rather than accept larger/default settings. Pin the release and run compatibility tests: the existing local Spark 3.5.9/Python 3.10 environment is not an exact match for Glue 5.0. [Glue runtime versions](https://docs.aws.amazon.com/glue/latest/dg/release-notes.html), [worker/job configuration](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-jobs-job.html).
 
-The trusted Python image will contain CPU-only dependencies and the required Lambda runtime interface. Training will download only approved gold shards into bounded `/tmp` space and upload results to S3; it cannot rely on persistent local files. Lambda supports container images, but that alone does not establish PyTorch startup speed or training feasibility. Prepackage the single EMR entry point and Python dependencies as well; the non-VPC job cannot assume access to external package indexes. [Lambda container requirements](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html).
+The trusted Python image will contain CPU-only dependencies and the required Lambda runtime interface. Training will download only approved gold shards into bounded `/tmp` space and upload results to S3; it cannot rely on persistent local files. Lambda supports container images, but that alone does not establish PyTorch startup speed or training feasibility. [Lambda container requirements](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html).
+
+Package the single Glue entry point, shared application modules, and pinned Python wheels in approved S3 objects. Rehearse with compatible Spark/Python dependencies in local development/CI; avoid resolving changing public packages during the metered cloud run. Glue supports additional Python files and prebuilt wheel artifacts. Parse Glue's runtime arguments deliberately and reuse one Spark session across stages; do not invoke the HDFS/Docker shell wrapper. [Glue Python dependency packaging](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-python-libraries.html).
 
 If local training cannot finish within the configured envelope, reduce the approved fixture and document the limitation. Do not silently provision Fargate/GPU capacity or rerun expensive jobs. A larger runtime would require a new design and cost estimate outside this phase's deployment profile.
 
@@ -170,13 +175,15 @@ Terraform will define one ephemeral environment, tagged with project/run identit
 
 Use separate least-privilege function roles, short-lived operator credentials, encrypted private storage, and configuration outside source control. This profile does not need a permanently paid secret service for app-managed key digests. Never publish credentials, presigned URLs, customer payloads, or raw personal identifiers in logs, screenshots, Terraform state, or recordings.
 
-CloudWatch evidence will cover cold/warm API latency, errors, fallback rate, dispatch lag, workflow state, resource duration, model version, and successful teardown. Keep access logs bounded and redact tokens/features. Record the actual fixture size, candidate count, model size, function memory/duration, EMR billed-resource result, and run timestamps alongside metrics; a small fixture cannot establish large-scale throughput or model quality.
+CloudWatch evidence will cover cold/warm API latency, errors, fallback rate, dispatch lag, workflow state, resource duration, model version, and successful teardown. Keep access logs bounded and redact tokens/features. Record the actual fixture size, candidate count, model size, function memory/duration, Glue job/worker configuration and observed run duration, and timestamps alongside metrics; a small fixture cannot establish large-scale throughput or model quality. Keep gross metered usage, applied credits, remaining reported credit, and any out-of-pocket amount separate in the cost report.
 
-Before public requests, apply low gateway route limits, application project/job quotas, small Lambda concurrency limits, and allowlisted training permissions. No unrestricted sign-up or anonymous training route belongs in this recording. These controls reduce exposure; AWS budgets and throttles are not guaranteed billing hard stops. Use [budget-and-recording.md](budget-and-recording.md) for the cost ledger, reserve, stop conditions, and exact recording sequence.
+Before public requests, apply low gateway route limits, application project/job quotas, small Lambda concurrency limits where the account permits them, and allowlisted training permissions. No unrestricted sign-up or anonymous training route belongs in this recording. AWS Budgets notifications are not a real-time spending circuit breaker, and application/gateway throttles are not dollar-accurate controls. Some new-experience projects offer separate managed spend limits; verify whether the actual account has them and their behavior before claiming enforcement. Neither the $100 reported credit nor an optional spend-limit feature replaces the supervised under-$10 usage plan. Use [budget-and-recording.md](budget-and-recording.md) for the cost ledger, reserve, stop conditions, and exact recording sequence.
 
-After recording, export sanitized screenshots, API responses, workflow history, metrics, and checksums locally. Then stop active executions/jobs; delete the ephemeral stack and verify CloudFront, API/Lambda, DynamoDB/Streams, EMR application, log groups, Cognito, S3 versions/uploads, and ECR images are gone or explicitly accounted for. A successful Terraform command alone is insufficient cleanup evidence. Retain the recording, source, architecture, measured results, and teardown report in the portfolio; do not leave billable resources serving a link that nobody needs.
+After recording, export sanitized screenshots, API responses, workflow history, metrics, and checksums locally. Then stop active executions/jobs, explicitly inspect/cancel Glue runs, and wait for in-flight Lambda work to finish or time out before deleting its inputs/outputs. Delete the ephemeral stack and verify CloudFront, API/Lambda, DynamoDB/Streams, Glue job definitions and associated storage/logs, Cognito, S3 versions/uploads, and ECR images are gone or explicitly accounted for. A successful Terraform command alone is insufficient cleanup evidence. Retain the recording, source, architecture, measured results, and teardown report in the portfolio; do not leave billable resources serving a link that nobody needs.
 
 ## 9. Larger production direction — not deployed in this phase
+
+The earlier EMR Serverless candidate is deferred because AWS places Amazon EMR in the Paid Plan list for its new sign-up experience, while Glue is listed for the Free Tier. The actual account still needs eligibility verification. This plan does not authorize upgrading to Paid or activating advanced features; if the proposed Glue job is unavailable, stop and revisit the design. A local Spark replay must be labeled local and cannot silently close the cloud Spark/self-service acceptance gate. [Account service availability](https://docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html), [Free/Paid project policies](https://docs.aws.amazon.com/accounts/latest/reference/scps-and-rcps-for-projects.html).
 
 For sustained customer use, reconsider dedicated CPU inference on ECS/Fargate or SageMaker after measuring model count, latency, and traffic. A larger design may use a database suited to catalog/query requirements, durable queue workers, separate staging, multi-AZ networking, tested backups, and stronger tenant IAM boundaries. Stateful API/inference replicas would need version-specific readiness and rollout coordination beyond Lambda's per-invocation version checks.
 

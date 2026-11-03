@@ -2,7 +2,9 @@
 
 **Status:** Planned; documentation checkpoint only. No Phase 7 application, infrastructure, cloud deployment, or production results are implemented by this plan. Phases 0–6 remain the reproducible research foundation.
 
-**Planning date:** November 2, 2026. **Deployment constraint:** a student portfolio project with a target of **less than $10 total AWS spend**, one short recording session, then teardown. This replaces the earlier suggestion of an always-running ECS/RDS deployment.
+**Planning date:** November 2, 2026. **Deployment constraint:** a recent-graduate portfolio project with a target of **less than $10 total AWS usage**, including usage paid by credits, one short recording session, then teardown. This replaces the earlier suggestion of an always-running ECS/RDS deployment.
+
+**Funding update:** the user reports a new AWS account with **$100 initial credits** and confirms it is on the **Free plan**. The balance/expiry and account-specific service access have not been independently verified. The project keeps its **$5 normal usage allowance and $9 envelope including reserves**; the credit balance does not increase the approved spend. AWS Glue is the proposed Spark provider for this Free-plan deployment, subject to account preflight. EMR requires a Paid plan in AWS's new signup service list and is deferred. [AWS service availability](https://docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html)
 
 ## 1. The next phase
 
@@ -41,7 +43,7 @@ The self-service workflow is intentionally limited to an owner-controlled test a
 
 | Area | Existing evidence | Phase 7 work |
 |---|---|---|
-| Distributed data processing | HDFS/Spark raw → bronze → silver → features → gold, quality checks, leakage tests, benchmarks | Add a project-specific canonical data adapter and bounded S3/EMR execution; keep the existing KuaiRand path reproducible |
+| Distributed data processing | HDFS/Spark raw → bronze → silver → features → gold, quality checks, leakage tests, benchmarks | Add a project-specific canonical data adapter and bounded S3/AWS Glue Spark execution; keep the existing KuaiRand path reproducible |
 | Model training | CPU PyTorch LR/DeepFM, feature specifications, saved checkpoints, held-out evaluation | Train a platform model on its own compatible item/event schema; produce immutable, deployable model bundles |
 | Inference | Frozen-model panel scoring three historical profiles | Implement request-time candidate selection, feature assembly, model scoring, version routing, and a disclosed baseline |
 | Feed | Responsive local preview and attributed playable media | Move to React/TypeScript, persist project-scoped activity through the API, and connect the feed to the platform ranker |
@@ -78,7 +80,7 @@ Arbitrary uploaded Python/model executables, arbitrary CSV schemas, custom model
 | Online persistence | DynamoDB on-demand | Avoids an idle relational database for the single-session deployment; requires documented access patterns and conditional writes |
 | Files | Private S3 objects with explicit manifests | Keeps raw data, processed partitions, and model bundles outside source control |
 | HTTP/auth | API Gateway HTTP API, Cognito dashboard identity, application-managed scoped API keys | Separates customer identity from server-to-server integration credentials |
-| Compute | Lambda APIs/ranking/small training; bounded EMR Serverless Spark job | Keeps idle application compute out of the primary topology |
+| Compute | Lambda APIs/ranking/small training; one bounded AWS Glue Spark job | Uses the proposed Free-plan service path with no idle application compute |
 | Workflow | Step Functions Standard plus durable job records | Shows actual asynchronous job state and handles failures without holding a browser request open |
 | Delivery | Terraform, local image builds, ECR, GitHub Actions with OIDC | Reviewable infrastructure and short-lived deployment credentials |
 
@@ -165,11 +167,11 @@ Describe a synthetic fixture as synthetic. Preserve original KuaiRand benchmark 
 
 ## 10. Decisions and open details
 
-Confirmed by the user: all three experiences, AWS backend, frontend stack chosen for fit, student budget under $10 total, recording once, GitHub evidence, and teardown afterward.
+Confirmed by the user: all three experiences, AWS backend, frontend stack chosen for fit, recent-graduate portfolio budget under $10 total, recording once, GitHub evidence, teardown afterward, a new Free-plan account with a reported $100 credit balance, and a preference to preserve most of those credits.
 
 Planning defaults: `us-east-1` for initial pricing comparison; an owner-controlled Cognito account plus a second isolation-test account; synthetic interaction fixtures joined to a small attributed catalog; no domain purchase; and a maximum four-hour cloud session. These are configurable assumptions, not existing AWS account settings.
 
-Before the cloud checkpoint, identify the intended AWS account/region, verify quotas and current prices, and choose the recording destination. Those details do not block local implementation. The user has requested this documentation; provisioning paid AWS resources and publishing new artifacts are separate implementation actions, not performed by writing this plan.
+Before the cloud checkpoint, identify the intended AWS account/region, verify the actual credit balance/expiry, eligible services, Glue/Lambda quotas, current prices, and choose the recording destination. Record gross service usage separately from credits applied and any out-of-pocket charges. Stay on the Free plan; activating Paid plan or advanced features is outside the current deployment profile. If a required operation is unavailable, pause that cloud step and resolve the design locally. Those details do not block local implementation. Provisioning AWS resources is not performed by writing this plan.
 
 ## 11. Phase status
 

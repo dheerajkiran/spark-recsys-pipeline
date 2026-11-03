@@ -2,7 +2,7 @@
 
 **Status: planned.** This document describes the frontend to build during Phase 7; it does not describe a deployed service. Use React + TypeScript + Vite for the new application while preserving the current Loop identity. The canonical implementation order and completion gates live in [checkpoints.md](checkpoints.md).
 
-**Deployment constraint:** this is a student portfolio project with a target below **$10 total for one short AWS demonstration**, followed by teardown. Build and rehearse locally first; target at most four hours from resource creation to stop/teardown start, then follow resource removal through to verification. The enduring recruiter experience is the GitHub documentation, screenshots, recorded tour, and reproducible local application; an always-running public website is outside this phase's deployment commitment. The [budget and recording plan](budget-and-recording.md) governs any AWS run.
+**Deployment constraint:** this is a recent-graduate portfolio project with a target below **$10 total gross usage for one short AWS demonstration**, followed by teardown. The reported $100 Free-plan credits fund eligible usage without increasing that allocation. Build and rehearse locally first; target at most four hours from resource creation to stop/teardown start, then follow resource removal through to verification. The enduring recruiter experience is the GitHub documentation, screenshots, recorded tour, and reproducible local application; an always-running public website is outside this phase's deployment commitment. The [budget and recording plan](budget-and-recording.md) governs any AWS run.
 
 Read alongside the [phase brief](README.md), [AWS architecture](architecture.md), and [data and model contracts](data-and-ml-contracts.md).
 
