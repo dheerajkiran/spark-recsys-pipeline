@@ -4,7 +4,7 @@ A distributed data preprocessing pipeline that turns raw short-video interaction
 
 Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features across a cluster of workers, and the result is written back as partitioned **Parquet**. A **PyTorch** CTR model then trains on that data.
 
-> **Status:** The raw-to-gold pipeline, training, and full model results are implemented. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). Benchmarks remain planned.
+> **Status:** Phases 0–6 cover the implemented raw-to-gold pipeline, training, model verification, and engineering benchmarks. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). **[Phase 7: AWS recommendation platform](docs/phase-7/README.md)** is planned: a public demo, developer API, and customer dashboard, built locally before one small recorded AWS deployment and teardown, targeting less than $10 total cloud spend.
 
 ---
 
@@ -40,7 +40,7 @@ The pipeline does four things end to end:
 - **Produces** a model-ready training dataset in Parquet, partitioned by date.
 - **Trains** a click-through-rate (CTR) model (DeepFM) in PyTorch on that dataset, and reports AUC and log loss.
 
-The whole cluster (HDFS and Spark) runs locally with Docker Compose. Anyone can reproduce it on a laptop, and it uses the same architecture as a production cluster. Only the number and size of machines differ.
+The whole cluster (HDFS and Spark) runs locally with Docker Compose so the research pipeline can be reproduced on a laptop. A hosted service additionally needs identity, isolated project data, online ranking, durable jobs, deployment, and operations; those are planned in [Phase 7](docs/phase-7/README.md).
 
 ### The ML task
 
@@ -676,16 +676,28 @@ The full 1K pipeline passes every quality check. Cleaning removed 0.86% of event
 | **4. Build dataset** | Joins, broadcast, salting, time split, gold layer | 1 day | `build_dataset.py` | Gold train/val/test written; split integrity check passes | Done |
 | **5. Training** | Parquet → PyTorch loader, LR baseline, DeepFM | 1 day | `training/` | DeepFM beats the LR baseline on validation AUC | Done |
 | **6. Benchmarks and polish** | Scaling, skew, pandas and format benchmarks; plots; Spark UI screenshots | 1 day | `benchmarks/`, final README | Results section filled in | Done |
+| **7. AWS recommendation platform** | Production-oriented backend/frontend, recommendation API, customer workflow, and recorded cloud proof | Checkpoint-based | [Phase 7 documentation](docs/phase-7/README.md) and planned platform | All three journeys verified; evidence exported; cloud resources removed | Planned |
 
-**Total: about 7 days.** Each phase ends in a working, runnable state.
+**Original estimate for phases 0–6: about 7 days.** Phase 7 is a separate, checkpoint-based implementation; no completion date is promised. Each checkpoint ends in a working, reviewable increment.
+
+### Phase 7: one platform, three experiences
+
+The next phase turns the research foundation into an integrated recommendation platform:
+
+- **Public demo:** a playable feed using the shared recommendation API.
+- **Developer API:** scoped credentials, item/event ingestion, and versioned recommendations.
+- **Customer dashboard:** create a project, upload supported data, validate it, train, inspect metrics, deploy, and roll back a model.
+
+The deployment is a **temporary student portfolio demonstration**, targeting **less than $10 total AWS spend**, followed by a recording, evidence export, and teardown. The plan uses React/TypeScript, API Gateway/Lambda, DynamoDB, S3, Cognito, Step Functions, and a bounded EMR Serverless Spark job. It does not claim an already deployed service, an availability SLA, or continuously operated production infrastructure.
+
+Start with the [phase brief](docs/phase-7/README.md), then the [twelve checkpoints](docs/phase-7/checkpoints.md). Supporting plans cover [AWS architecture](docs/phase-7/architecture.md), [data and ML contracts](docs/phase-7/data-and-ml-contracts.md), [frontend and demo](docs/phase-7/frontend-and-demo.md), and [budget, recording, and teardown](docs/phase-7/budget-and-recording.md). The existing historical DeepFM preview remains distinct from the planned live-ranking platform.
 
 **Stretch goals:**
 - Run on YARN instead of standalone mode.
-- Orchestrate the stages with Airflow.
 - Use Delta Lake for the silver and gold layers.
 - Read training data directly from HDFS in PyTorch.
 - Attention-based user history (DIN).
-- Deploy to a cloud cluster (AWS EMR or GCP Dataproc) and compare cost and runtime.
+- Compare multi-machine cloud cost/runtime in a separately budgeted research extension; the small Phase 7 recording is not a cloud scaling benchmark.
 
 ---
 
@@ -750,7 +762,9 @@ spark-recsys-pipeline/
 │   ├── check_readme.py       # README section 18 numbers = CSV numbers
 │   ├── tests/                # harness tests (host Python)
 │   └── results/              # CSVs, and plots/ (PNG)
-├── docs/img/                 # Spark UI screenshots
+├── docs/
+│   ├── img/                  # Spark UI screenshots
+│   └── phase-7/              # AWS platform plan, contracts, checkpoints, budget
 ├── tests/                    # pytest unit tests for transformations
 └── README.md
 ```
