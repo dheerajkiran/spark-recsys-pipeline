@@ -1,0 +1,53 @@
+name: Phase 7 local foundation
+on:
+  push:
+    paths:
+      - '.github/workflows/phase7-local.yml'
+      - 'services/**'
+      - 'docker/platform/**'
+      - 'contracts/**'
+      - 'training/**'
+      - 'serving/**'
+      - 'frontend/**'
+      - 'package*.json'
+      - 'tsconfig.json'
+      - 'eslint.config.mjs'
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: cd frontend && npm test && npm run check
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: python -m pip install -r requirements-contracts.lock
+      - run: python -m contracts.check
+      - run: python -m pytest contracts/tests -q
+  ranker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: python -m pip install -r docker/platform/requirements.lock 'pytest==8.3.3'
+      - run: python -m pip install --no-deps --index-url https://download.pytorch.org/whl/cpu 'torch==2.5.1'
+      - run: LOOP_WORK_ROOT=/tmp/loop-work LOOP_ARTIFACT_ROOT=/tmp/loop-artifacts python -m services.ranker.main selfcheck
+      - run: python -m pytest training/tests serving/tests -q
+      - run: docker build -f docker/platform/Dockerfile -t loop-ranker:local .

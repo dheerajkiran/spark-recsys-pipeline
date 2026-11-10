@@ -1,6 +1,6 @@
 # Phase 7 — AWS recommendation platform
 
-**Status:** In progress. Checkpoint 7.1 provides [executable contracts and synthetic fixtures](../../contracts/README.md), with [local completion evidence](completions/7.1.md). Application services, infrastructure, cloud deployment, and platform ML results remain planned. Phases 0–6 remain the reproducible research foundation.
+**Status:** In progress. Checkpoint 7.1 provides [executable contracts and synthetic fixtures](../../contracts/README.md), with [local completion evidence](completions/7.1.md). Checkpoint 7.2 provides the [local API, storage, workflow, and CPU image foundation](completions/7.2.md). Identity, customer data flows, infrastructure, cloud deployment, and platform ML results remain planned. Phases 0–6 remain the reproducible research foundation.
 
 **Planning date:** November 2, 2026; budget updated November 10, 2026. **Deployment constraint:** a recent-graduate portfolio project with **up to $100 in reported AWS credits available**, aiming to spend comfortably below that maximum, one short recording session, then teardown. This replaces the earlier small spending limit; the temporary deployment still replaces the earlier suggestion of always-running ECS/RDS.
 

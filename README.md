@@ -4,7 +4,7 @@ A distributed data preprocessing pipeline that turns raw short-video interaction
 
 Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features across a cluster of workers, and the result is written back as partitioned **Parquet**. A **PyTorch** CTR model then trains on that data.
 
-> **Status:** Phases 0–6 cover the implemented raw-to-gold pipeline, training, model verification, and engineering benchmarks. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). **[Phase 7: AWS recommendation platform](docs/phase-7/README.md)** is in progress: [checkpoint 7.1 contracts and synthetic fixtures](contracts/README.md) are implemented; the application and cloud deployment remain planned. Build locally before one small recorded AWS deployment and teardown. Up to $100 in reported AWS credits is available; aim to spend comfortably below that maximum.
+> **Status:** Phases 0–6 cover the implemented raw-to-gold pipeline, training, model verification, and engineering benchmarks. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). **[Phase 7: AWS recommendation platform](docs/phase-7/README.md)** is in progress: [checkpoint 7.1 contracts and synthetic fixtures](contracts/README.md) and the [checkpoint 7.2 local foundation](docs/phase-7/completions/7.2.md) are implemented. Identity, customer data flows, and cloud deployment remain planned. Build locally before one small recorded AWS deployment and teardown. Up to $100 in reported AWS credits is available; aim to spend comfortably below that maximum.
 
 ---
 

@@ -30,3 +30,15 @@ checkpoints/
 .DS_Store
 .vscode/
 .idea/
+
+# Local platform build, runtime data, and credentials
+node_modules/
+services/api/dist/
+.env
+.env.*
+!.env.example
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+platform-local/

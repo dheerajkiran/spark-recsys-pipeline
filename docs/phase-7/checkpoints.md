@@ -1,6 +1,6 @@
 # Phase 7 implementation checkpoints
 
-**Status:** Checkpoint 7.1 is complete locally, with [implementation and verification evidence](completions/7.1.md). Checkpoints 7.2–7.12 remain planned. Application services and AWS work described below have not been performed.
+**Status:** Checkpoints 7.1 and 7.2 are complete locally, with [7.1 evidence](completions/7.1.md) and [7.2 evidence](completions/7.2.md). Checkpoints 7.3–7.12 remain planned. AWS work described below has not been performed.
 
 Read the [phase brief](README.md), [architecture](architecture.md), [data/ML contracts](data-and-ml-contracts.md), [frontend plan](frontend-and-demo.md), and [budget runbook](budget-and-recording.md) together. On November 10, 2026, the user made the reported **$100 AWS credit balance available to this project**, replacing the earlier small spending limit and asking to stay comfortably below that maximum. Keep the planning buffer in the budget runbook, one recording session, then teardown. The previously confirmed Free plan and proposed AWS Glue Spark path remain subject to account preflight. Checkpoints 7.1–7.10 are local work; infrastructure documents and plans do not authorize an unattended cloud deployment or account-plan upgrade.
 
@@ -13,7 +13,7 @@ The named folders and commands below are proposed deliverables. They are not com
 | Checkpoint | Deliverable | Main dependency | Current state |
 |---|---|---|---|
 | 7.1 | Product/data/API contracts and bounded demo fixture | Phase brief | Complete locally |
-| 7.2 | Local platform foundation and CI | 7.1 | Planned |
+| 7.2 | Local platform foundation and CI | 7.1 | Complete locally |
 | 7.3 | Identity, project isolation, and API credentials | 7.2 | Planned |
 | 7.4 | Upload validation, ingestion, and durable job records | 7.3 | Planned |
 | 7.5 | Canonical Spark feature build and S3 manifests | 7.4 | Planned |
@@ -70,6 +70,8 @@ Verify:
 **Artifacts:** Local startup instructions, dependency lock files, container definitions, CI workflow, and configuration examples with no real credentials.
 
 **Exit:** The shared platform foundation runs locally and is reproducible without existing ignored data/checkpoints.
+
+**Completion:** [7.2 record](completions/7.2.md), [API startup and local adapter notes](../../services/api/README.md), and [CPU image instructions](../../docker/platform/README.md). Protected operations remain closed pending 7.3.
 
 ## 7.3 — Enforce identity and project isolation
 
