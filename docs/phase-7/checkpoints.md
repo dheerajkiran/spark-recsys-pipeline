@@ -1,8 +1,8 @@
 # Phase 7 implementation checkpoints
 
-**Status:** All implementation checkpoints below are planned. The phase documentation exists; the application and AWS work described here has not been performed.
+**Status:** Checkpoint 7.1 is complete locally, with [implementation and verification evidence](completions/7.1.md). Checkpoints 7.2–7.12 remain planned. Application services and AWS work described below have not been performed.
 
-Read the [phase brief](README.md), [architecture](architecture.md), [data/ML contracts](data-and-ml-contracts.md), [frontend plan](frontend-and-demo.md), and [budget runbook](budget-and-recording.md) together. The user-approved constraint remains **less than $10 total gross AWS usage**, one recording session, then teardown. The reported $100 credits on a new Free-plan account fund eligible usage without increasing this project allocation. The proposed cloud Spark path now uses AWS Glue instead of Paid-plan EMR, subject to account preflight. Checkpoints 7.1–7.10 are local work; infrastructure documents and plans do not authorize an unattended cloud deployment or account-plan upgrade.
+Read the [phase brief](README.md), [architecture](architecture.md), [data/ML contracts](data-and-ml-contracts.md), [frontend plan](frontend-and-demo.md), and [budget runbook](budget-and-recording.md) together. On November 10, 2026, the user made the reported **$100 AWS credit balance available to this project**, replacing the earlier small spending limit and asking to stay comfortably below that maximum. Keep the planning buffer in the budget runbook, one recording session, then teardown. The previously confirmed Free plan and proposed AWS Glue Spark path remain subject to account preflight. Checkpoints 7.1–7.10 are local work; infrastructure documents and plans do not authorize an unattended cloud deployment or account-plan upgrade.
 
 ## How to use a checkpoint
 
@@ -12,7 +12,7 @@ The named folders and commands below are proposed deliverables. They are not com
 
 | Checkpoint | Deliverable | Main dependency | Current state |
 |---|---|---|---|
-| 7.1 | Product/data/API contracts and bounded demo fixture | Phase brief | Planned |
+| 7.1 | Product/data/API contracts and bounded demo fixture | Phase brief | Complete locally |
 | 7.2 | Local platform foundation and CI | 7.1 | Planned |
 | 7.3 | Identity, project isolation, and API credentials | 7.2 | Planned |
 | 7.4 | Upload validation, ingestion, and durable job records | 7.3 | Planned |
@@ -33,8 +33,8 @@ Build:
 
 1. Record architecture decisions for React/TypeScript, serverless AWS, DynamoDB access patterns, and a small CPU-only model. Keep a separate section for future continuously operated production requirements.
 2. Define project ownership/roles, resource identifiers, API errors, pagination, request IDs, idempotency rules, and an initial versioned OpenAPI contract. Dashboard identity, developer keys, and public-demo routes have different permissions.
-3. Freeze the canonical item/event schemas and the exposure-to-click label policy in [data-and-ml-contracts.md](data-and-ml-contracts.md). Initial proposals are a 30-minute attribution window and 24-hour accepted-lateness window; make their exact meaning executable and versioned before building features.
-4. Create a deterministic fixture generator, a tiny playable catalog with compatible item IDs, and two project datasets. A candidate fixture is about 100 users, 100 items, and 10,000 mature impressions; generated files are reproducible from a seed rather than silently committed under the current `*.csv` ignore rule.
+3. Freeze the canonical item/event schemas and the exposure-to-click label policy in [data-and-ml-contracts.md](data-and-ml-contracts.md). The executable `click-v1` contract now fixes a 30-minute attribution window and 24-hour accepted-lateness window, including exact boundaries and delayed-arrival behavior.
+4. Create a deterministic fixture generator, a tiny playable catalog with compatible item IDs, and two project datasets. The implemented default has 100 synthetic users, eight distinct bundled playable items, and 10,000 impressions per project (9,944 mature rows after split-boundary purging). Eight real clips replace the initial candidate of roughly 100 items to keep a fresh clone reproducible. Generated CSVs remain ignored.
 5. Record budgets for data size, requests, job count, execution time, and evidence retention. Inventory the existing tests and interfaces that must keep working.
 
 Verify:
@@ -46,6 +46,8 @@ Verify:
 **Artifacts:** `contracts/`, a fixture generator, ADRs, a scope/decision record, and the initial access-pattern table.
 
 **Exit:** The API/data contract and demo limits are documented with no ambiguous promise of arbitrary datasets, live retraining, or proven engagement lift.
+
+**Completion:** [7.1 record](completions/7.1.md), [contract guide](../../contracts/README.md), [ADR 0001](decisions/0001-platform-v1.md), [permissions/access patterns](access-patterns.md), and [scope/regression inventory](scope-and-limits.md). The implemented contract has 29 operations and 21 validated examples; 101 contract tests and 94 existing frontend tests pass. No runtime authorization, feature processing, model training, or cloud deployment is claimed.
 
 ## 7.2 — Create the local platform foundation
 
@@ -235,7 +237,7 @@ Build:
 3. Create local image/build/package workflows and a manual cloud delivery workflow; ordinary pushes run checks without applying infrastructure or training models.
 4. Add expiry, application quotas, workflow/job timeouts, reconciliation limits, no provisioned concurrency or idle Glue interactive sessions, and short log retention. Implement an independently invokable session stop procedure; an optional timed stop is defense in depth, not a billing guarantee.
 5. Write evidence export and resource inventory/teardown scripts. Verify state files, credentials, raw datasets, model weights, and unredacted logs remain ignored before generating them.
-6. Fill the regional price/usage worksheet with current rates, deployment overhead, anticipated requests, taxes, and a reserve. Verify the reported credit balance/expiry and eligible-service coverage in the intended Free-plan account, together with Glue/Lambda quotas and the required IAM operations. Estimate gross usage before applying credits; an available $100 balance does not raise the $5 normal usage allowance.
+6. Fill the regional price/usage worksheet with current rates, deployment overhead, anticipated requests, taxes, and a reserve. Verify the reported credit balance/expiry, Free-plan end date, and eligible-service coverage in the intended account, together with Glue/Lambda quotas and the required IAM operations. Estimate gross usage before applying credits; include any prior project usage and preserve the budget runbook's planning buffer below the available $100 maximum.
 
 Verify:
 
@@ -245,7 +247,7 @@ Verify:
 
 **Artifacts:** Terraform, CI workflow, a filled cost preflight, deployment/stop/destroy runbooks, and local rehearsal evidence.
 
-**Exit:** A cleanly specified one-session deployment has an estimated usage cost of at most $5 with enough remaining room to target less than $10 total. If that estimate or any resource gate fails, reduce scope or stay local; do not launch hoping credits will cover it.
+**Exit:** A cleanly specified one-session deployment has a refreshed cumulative cost estimate, including unfinished work and cleanup, that preserves the budget runbook's buffer under the $100 project maximum; estimated remaining work also preserves that buffer against verified remaining credits. If that estimate or any resource gate fails, reduce scope or stay local; do not launch hoping credits will cover it.
 
 ## 7.11 — Run the short AWS proof and recording
 
@@ -279,7 +281,7 @@ Build/run:
 2. Download and verify the recordings, safe result summaries, configuration/manifests, and required logs before deleting their cloud copies. Revoke test API keys and discard test identities during teardown.
 3. Destroy the environment, including object versions, images, distributions, log groups, alarms, queues, tables/backups, and any bootstrap state resources. Preserve state locally outside Git until cleanup has been verified, then follow the state-retention decision.
 4. Inspect the intended account/region and any global resources; compare inventory against the deployment resource list. Retry failed removals deliberately and record the reason for any remaining resource.
-5. Reconcile delayed billing/usage, including taxes and ancillary services, against the under-$10 gross target. Report service usage, credits applied, remaining credit balance, and any cash charges separately. Record final versus pending charges; a successful `destroy` command alone does not prove the final bill or credit consumption.
+5. Reconcile delayed billing/usage, including taxes and ancillary services, against the refreshed estimate, planning buffer, and user-authorized maximum of $100. Report service usage, credits applied, remaining credit balance, and any cash charges separately. Record final versus pending charges; a successful `destroy` command alone does not prove the final bill or credit consumption.
 6. Finish the root README, architecture screenshots, recording link, short case study, relevant measured results, tradeoffs, and known limitations. Keep bulk video out of the source tree when a GitHub release/attachment or external recording link is more suitable; publication is a separate explicit step.
 
 Verify:

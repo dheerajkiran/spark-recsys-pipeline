@@ -4,7 +4,7 @@ A distributed data preprocessing pipeline that turns raw short-video interaction
 
 Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features across a cluster of workers, and the result is written back as partitioned **Parquet**. A **PyTorch** CTR model then trains on that data.
 
-> **Status:** Phases 0–6 cover the implemented raw-to-gold pipeline, training, model verification, and engineering benchmarks. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). **[Phase 7: AWS recommendation platform](docs/phase-7/README.md)** is planned: a public demo, developer API, and customer dashboard, built locally before one small recorded AWS deployment and teardown, targeting less than $10 total cloud spend.
+> **Status:** Phases 0–6 cover the implemented raw-to-gold pipeline, training, model verification, and engineering benchmarks. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). **[Phase 7: AWS recommendation platform](docs/phase-7/README.md)** is in progress: [checkpoint 7.1 contracts and synthetic fixtures](contracts/README.md) are implemented; the application and cloud deployment remain planned. Build locally before one small recorded AWS deployment and teardown. Up to $100 in reported AWS credits is available; aim to spend comfortably below that maximum.
 
 ---
 
@@ -676,7 +676,7 @@ The full 1K pipeline passes every quality check. Cleaning removed 0.86% of event
 | **4. Build dataset** | Joins, broadcast, salting, time split, gold layer | 1 day | `build_dataset.py` | Gold train/val/test written; split integrity check passes | Done |
 | **5. Training** | Parquet → PyTorch loader, LR baseline, DeepFM | 1 day | `training/` | DeepFM beats the LR baseline on validation AUC | Done |
 | **6. Benchmarks and polish** | Scaling, skew, pandas and format benchmarks; plots; Spark UI screenshots | 1 day | `benchmarks/`, final README | Results section filled in | Done |
-| **7. AWS recommendation platform** | Production-oriented backend/frontend, recommendation API, customer workflow, and recorded cloud proof | Checkpoint-based | [Phase 7 documentation](docs/phase-7/README.md) and planned platform | All three journeys verified; evidence exported; cloud resources removed | Planned |
+| **7. AWS recommendation platform** | Production-oriented backend/frontend, recommendation API, customer workflow, and recorded cloud proof | Checkpoint-based | [Contracts and fixtures](contracts/README.md); application/platform planned | All three journeys verified; evidence exported; cloud resources removed | In progress: 7.1 complete locally |
 
 **Original estimate for phases 0–6: about 7 days.** Phase 7 is a separate, checkpoint-based implementation; no completion date is promised. Each checkpoint ends in a working, reviewable increment.
 
@@ -688,7 +688,7 @@ The next phase turns the research foundation into an integrated recommendation p
 - **Developer API:** scoped credentials, item/event ingestion, and versioned recommendations.
 - **Customer dashboard:** create a project, upload supported data, validate it, train, inspect metrics, deploy, and roll back a model.
 
-The deployment is a **temporary recent-graduate portfolio demonstration**, targeting **less than $10 total AWS usage**, followed by a recording, evidence export, and teardown. A new Free-plan account with a reported $100 initial credit balance funds eligible usage; the project allocation remains $5 normal usage plus reserves, preserving most credits. The plan uses React/TypeScript, API Gateway/Lambda, DynamoDB, S3, Cognito, Step Functions, and a bounded AWS Glue Spark job, subject to account-specific service/permission checks. It does not claim an already deployed service, an availability SLA, or continuously operated production infrastructure.
+The deployment is a **temporary recent-graduate portfolio demonstration**, followed by a recording, evidence export, and teardown. On November 10, 2026, the user made the reported **$100 AWS credit balance available to this project**, replacing the earlier small spending limit, while asking to stay comfortably below that maximum. The budget runbook defines a planning buffer and a preflight based on the verified remaining balance; this is not a target to consume all credits. The plan uses React/TypeScript, API Gateway/Lambda, DynamoDB, S3, Cognito, Step Functions, and a bounded AWS Glue Spark job, subject to account-specific service/permission checks. It does not claim an already deployed service, an availability SLA, or continuously operated production infrastructure.
 
 Start with the [phase brief](docs/phase-7/README.md), then the [twelve checkpoints](docs/phase-7/checkpoints.md). Supporting plans cover [AWS architecture](docs/phase-7/architecture.md), [data and ML contracts](docs/phase-7/data-and-ml-contracts.md), [frontend and demo](docs/phase-7/frontend-and-demo.md), and [budget, recording, and teardown](docs/phase-7/budget-and-recording.md). The existing historical DeepFM preview remains distinct from the planned live-ranking platform.
 
