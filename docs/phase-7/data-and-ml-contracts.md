@@ -1,6 +1,6 @@
 # Phase 7 — data, recommendation, and model contracts
 
-**Status: proposed implementation specification.** Updated November 2, 2026. This is a recent-graduate portfolio build: rehearse locally, perform one short AWS recording with a target of less than **$10 gross AWS usage before credits**, export evidence, and remove every cloud resource. The user reports a new account on the Free plan with $100 in credits; account eligibility, remaining balance, expiry, and applicable coverage are not verified by this document. The $5 planned-usage allowance and $9 envelope in the [budget runbook](budget-and-recording.md) still control the experiment; credits do not expand its scope. The spending target is not an enforceable billing cap. The contracts below describe work for Phase 7; they are not features already provided by the repository. Use the [phase overview](README.md), [AWS architecture](architecture.md), [frontend plan](frontend-and-demo.md), and [checkpoint plan](checkpoints.md) together.
+**Status: input and label contracts frozen in checkpoint 7.1; feature, ML, application, and cloud implementation remain planned.** Updated November 10, 2026. Executable definitions, fixtures, and checks are in [contracts/](../../contracts/README.md). This is a recent-graduate portfolio build: rehearse locally, perform one short AWS recording, export evidence, and remove every cloud resource. The user has made a reported **$100 credit balance available to this project**, with instructions to stay comfortably below that maximum. The previously confirmed Free plan remains the deployment assumption; account eligibility, remaining balance, expiry, and applicable coverage are not verified by this document. The [budget runbook](budget-and-recording.md) defines the planning buffer and preflight; additional credit headroom does not change the bounded data/model profile below. The spending target is not an enforceable billing cap. Use the [phase overview](README.md), [AWS architecture](architecture.md), [frontend plan](frontend-and-demo.md), and [checkpoint plan](checkpoints.md) together.
 
 ## 1. Preserve the research result; build a separate product data path
 
@@ -12,7 +12,7 @@ The first supported product is item ranking from recorded exposures and interact
 
 ### Recording fixture and limits
 
-Create a seeded, clearly labelled synthetic fixture: approximately 100 users, 100 playable catalog item IDs, and 10,000 mature exposures with linked click/watch events. Record the generator seed, rules, timestamps, and file digests. Its IDs must match the demo catalog, rather than borrowing KuaiRand IDs. Synthetic relevance patterns can demonstrate real feature construction and inference; their measured metrics are not evidence of real-world personalization quality or customer impact.
+Checkpoint 7.1 supplies two seeded, clearly labelled synthetic project fixtures, each with 100 users, eight distinct bundled playable catalog item IDs, and 10,000 exposures with linked click/watch events. The eight existing clips replace the earlier candidate of roughly 100 playable items so a fresh clone needs no external import. After split-boundary purging, each default dataset has 9,944 mature supervised rows with sufficient classes in every split. The generator records its seed, rules, timestamps, and file digests. Item IDs match the auxiliary media manifest, rather than borrowing KuaiRand IDs. Synthetic relevance patterns demonstrate contract behavior; their eventual measured metrics will not establish real-world personalization quality or customer impact.
 
 Use historical fixture timestamps so label windows have matured; do not wait a day during the recording or disable label checks. Bound the complete uploaded dataset to 50 MiB and the model artifact to 10 MiB, with measured local rehearsal enforcing those limits. Permit at most one tiny AWS Spark/training workflow during the recording. Full KuaiRand training, cloud benchmarks, hyperparameter searches, repeated retraining, and automatic schedules remain outside this recording budget.
 
@@ -23,15 +23,15 @@ A dataset upload contains UTF-8 CSV files with headers: required `items.csv` and
 | File | Required fields | Optional, explicitly supported fields |
 |---|---|---|
 | `items.csv` | `item_id`, `published_at`, `active` | `creator_id`, `topic`, `duration_ms` |
-| `events.csv` | `event_id`, `event_type`, `user_id`, `item_id`, `occurred_at`, `impression_id` | `request_id`, `session_id`, `watch_ms` |
+| `events.csv` | `event_id`, `event_type`, `user_id`, `item_id`, `occurred_at`, `impression_id` | `request_id`, `session_id`, `watch_ms`, offline `received_at` |
 | `users.csv` | `user_id` | `created_at` |
 
 Rules for the first contract:
 
-- IDs are nonempty strings of at most 128 characters. Preserve leading zeros and case; never infer numeric IDs from CSV content. External IDs are unique only within a project.
+- External IDs are case-sensitive strings matching `[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`. Preserve leading zeros; never infer numeric IDs from CSV content. IDs are unique only within a project. Internal resource IDs use typed prefixes and 32 lowercase hexadecimal characters.
 - `event_type` is one of `impression`, `click`, or `watch`. Every click/watch references a real impression for the same project, user, and item. An impression uses its own stable `impression_id`; every event has a distinct `event_id`.
 - Timestamps are RFC 3339 values with an explicit offset, normalized to UTC. Reject naive dates. Persist both `occurred_at` and server-assigned `received_at` for online events.
-- `active` is an explicit boolean. `duration_ms` and `watch_ms` are nonnegative integers when present. Apply documented maximum lengths, row counts, file sizes, and timestamp tolerances at validation.
+- `active` is an explicit boolean (`true`/`false` in CSV). `duration_ms` and `watch_ms` are nonnegative integers when present, capped at 86,400,000 ms; `watch_ms` is required only for watch events and cannot exceed a known item duration. Enforce the contract's file/row limits and five-minute receipt clock-skew allowance.
 - Reject conflicting duplicate IDs, unknown item references, malformed values, and impossible event ordering. Identical repeated events are deduplicated. Return row numbers and safe field-level errors; do not silently discard a large fraction of an upload.
 - Project/organization ownership comes from the authenticated principal and stored upload session. A client-provided project ID never grants access to another project.
 - User identity is pseudonymous. Email addresses and names are unnecessary model inputs. Mutable item metadata needs validity timestamps or versioned snapshots; current metadata cannot silently be joined into old training examples.
@@ -56,25 +56,25 @@ An example event body, with project ownership resolved from the authenticated ro
 
 The API validates and durably accepts bounded batches before returning an acceptance ID. Delivery and worker retries must be idempotent using `(project_id, event_id)`; this provides one accepted logical event despite repeated delivery. Do not claim exactly-once network delivery. Track accepted, duplicate, rejected, and late events separately.
 
-A recommendation response is not an impression. The demo records an impression only after the card meets the agreed visibility rule, proposed as at least 50% visible for one continuous second. Repeated callbacks reuse the same impression ID. Instrument a click only for an exposed item. Automated imports must describe how their source measured exposure.
+A recommendation response is not an impression. The frozen browser rule requires at least 50% of the card visible for one continuous second while the document is visible and media is playable. Repeated callbacks reuse the same impression ID. Instrument a click only for an exposed item; watch duration includes only visible active playback. Automated imports must describe how their source measured exposure. Browser implementation remains checkpoint 7.9.
 
 ## 3. Click labels, maturity, and eligibility
 
 The proposed first objective is **a click after an observed impression**. Autoplay, watch time, and likes are not interchangeable with a click. A later watch-based objective requires its own target definition and dataset/model version.
 
-Proposed initial settings, to be confirmed at the contract checkpoint:
+Settings frozen by the executable `click-v1` reference contract in checkpoint 7.1:
 
 | Policy | Starting value | Meaning |
 |---|---|---|
-| Click attribution window | 30 minutes | A linked click must occur after the impression and within this interval |
-| Accepted event lateness | 24 hours | Delay allowance before an exposure's label becomes final |
+| Click attribution window | 30 minutes | `impression_time < click_time <= impression_time + 30 minutes` |
+| Accepted event lateness | 24 hours | Receipt is on time at or before that event's occurrence plus 24 hours; late events are retained/counted and excluded from supervised labels/reference histories |
 | Learned-model eligibility | 1,000 mature impressions, with at least 20 positive and 20 negative labels in each split | A demo eligibility floor; it does not establish adequate statistical power |
 
-For a mature impression, `label = 1` if a valid linked click exists in the attribution window; otherwise `label = 0`. An exposure is mature only when its attribution window and lateness allowance have elapsed relative to the extraction watermark. Keep unresolved exposures out of supervised training. Never create negative examples from catalog items that were not exposed.
+For a mature impression, `label = 1` if a valid, on-time linked click exists in the attribution window; otherwise `label = 0`. An exposure is mature when `impression_time + 30 minutes + 24 hours <= extraction_watermark`. Keep unresolved exposures out of supervised training. Never create negative examples from catalog items that were not exposed.
 
 Preserve late events with a flag and counts. A published dataset is immutable; a changed lateness policy or corrected source creates a new version. Customers with only clicks, no exposure records, or insufficient label support receive an explanation and the baseline path rather than fabricated CTR training data.
 
-Freeze chronological train/validation/test cutoffs in the dataset configuration before selecting models. Purge exposures whose attribution interval crosses a split boundary. Fit vocabularies, imputation values, and scalers on the training period only. Use validation for model/epoch selection and the predeclared promotion criteria; it must not contribute fitted preprocessing statistics. Keep the final test set outside tuning and promotion decisions; evaluate it once after the choice is frozen. A split with one label class has no valid ROC-AUC and must show `not available`, not a substituted score.
+Freeze chronological train/validation/test cutoffs in the dataset configuration before selecting models. Intervals are half-open; purge exposures whose attribution interval touches or crosses the next split boundary. Fit vocabularies, imputation values, and scalers on the training period only. Use validation for model/epoch selection and the predeclared promotion criteria; it must not contribute fitted preprocessing statistics. Keep the final test set outside tuning and promotion decisions; evaluate it once after the choice is frozen. A split with one label class has no valid ROC-AUC and must show `not available`, not a substituted score.
 
 ## 4. Stable feature identity and point-in-time correctness
 
@@ -82,7 +82,7 @@ Model artifacts contain the exact feature order, dtypes, transformations, vocabu
 
 Build the first online feature set from what is actually available in both training and serving: bounded user history, prior exposure/click counts, prior item popularity, supported item metadata, and request-time context. Add richer features only after both paths implement them. Missing KuaiRand-only attributes need a new feature specification and retraining, not arbitrary zero-filled inputs to the old checkpoint.
 
-Every recommendation request captures one context timestamp and one feature snapshot/watermark for all candidates. Histories and aggregates include only earlier events available by that request; exclude the impression being predicted and its future outcomes. Order history by `(occurred_at, event_id)` with a documented rule for equal timestamps. Bound history length and apply a versioned late-event policy. A model with previous-day popularity features must use previous-day features online as well.
+Every recommendation request captures one context timestamp and one immutable feature snapshot/watermark for all candidates, as selected in [ADR 0001](decisions/0001-platform-v1.md). Histories include on-time events with occurrence strictly before the request and receipt at or before the pinned snapshot cutoff; the cutoff cannot follow request time. A prior impression cannot expose its click before that click's receipt. Order equal event timestamps by event ID and exclude events at the request instant. Bound history length and apply the same late-event policy to features and labels. A model with previous-day popularity features must use previous-day features online as well.
 
 Use a shared pure transformation specification where practical. Golden parity fixtures must compare offline Spark results with online feature vectors for the same project, timestamp, candidate set, encoders, and snapshot. Define tolerances for floating-point values and require exact categorical/history indices. Passing a forward-model test alone does not establish feature parity.
 

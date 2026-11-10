@@ -8,8 +8,13 @@ data/
 __pycache__/
 *.pyc
 .venv/
+.venv-contracts/
 venv/
 .pytest_cache/
+
+# Generated platform fixtures and local package caches
+contracts/generated/
+.ruff_cache/
 
 # Spark / Hadoop local artifacts
 spark-warehouse/
@@ -25,3 +30,15 @@ checkpoints/
 .DS_Store
 .vscode/
 .idea/
+
+# Local platform build, runtime data, and credentials
+node_modules/
+services/api/dist/
+.env
+.env.*
+!.env.example
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+platform-local/

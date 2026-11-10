@@ -1,0 +1,154 @@
+{
+  "api": {
+    "contract_version": "recommendation-v1",
+    "examples": 21,
+    "openapi_version": "3.1.0",
+    "operations": 29,
+    "paths": 23,
+    "permission_invariants": true
+  },
+  "catalog": {
+    "example_references_checked": 2,
+    "playable_items": 8
+  },
+  "checkpoint": "7.1",
+  "environment": {
+    "node": "v22.22.2",
+    "platform": "macOS Apple Silicon",
+    "python": "3.10.21"
+  },
+  "fixtures": {
+    "projects": [
+      {
+        "availability_mode": "recorded_arrival",
+        "bytes": 2069064,
+        "counts": {
+          "duplicates": 0,
+          "events": 15932,
+          "impressions": 10000,
+          "items": 8,
+          "late_events": 0,
+          "mature_training_rows": 9944,
+          "users": 100
+        },
+        "dataset_id": "dts_1da0c2ced40b5a90b3299f632a34ffaa",
+        "eligible": true,
+        "playable_items": 8,
+        "project_id": "prj_0a07bd31a2805f25b7a69e873b138c06",
+        "provenance": {
+          "generator": "phase71-fixture-v1",
+          "kind": "synthetic",
+          "note": "Synthetic users, exposures, clicks, watches, receipt times, and item publication times over eight credited bundled clips. No real-user relevance or historical arrival replay claim.",
+          "seed": 7101
+        },
+        "replay_fidelity": "synthetic",
+        "schema_version": "recommendation-v1",
+        "splits": {
+          "test": {
+            "negative": 1384,
+            "positive": 416,
+            "total": 1800
+          },
+          "train": {
+            "negative": 4794,
+            "positive": 1551,
+            "total": 6345
+          },
+          "validation": {
+            "negative": 1342,
+            "positive": 457,
+            "total": 1799
+          }
+        }
+      },
+      {
+        "availability_mode": "recorded_arrival",
+        "bytes": 2059112,
+        "counts": {
+          "duplicates": 0,
+          "events": 15851,
+          "impressions": 10000,
+          "items": 8,
+          "late_events": 0,
+          "mature_training_rows": 9944,
+          "users": 100
+        },
+        "dataset_id": "dts_0e018d2024275e18bb20175786da3311",
+        "eligible": true,
+        "playable_items": 8,
+        "project_id": "prj_3867df85cf055c9cb88525e1fd44ea68",
+        "provenance": {
+          "generator": "phase71-fixture-v1",
+          "kind": "synthetic",
+          "note": "Synthetic users, exposures, clicks, watches, receipt times, and item publication times over eight credited bundled clips. No real-user relevance or historical arrival replay claim.",
+          "seed": 7101
+        },
+        "replay_fidelity": "synthetic",
+        "schema_version": "recommendation-v1",
+        "splits": {
+          "test": {
+            "negative": 1371,
+            "positive": 429,
+            "total": 1800
+          },
+          "train": {
+            "negative": 4834,
+            "positive": 1511,
+            "total": 6345
+          },
+          "validation": {
+            "negative": 1389,
+            "positive": 410,
+            "total": 1799
+          }
+        }
+      }
+    ]
+  },
+  "manifest_sha256": {
+    "project-1": "1a6ed1282ff47366cb6a3402c2438050b584e68220abaab52091da9b9784dbf5",
+    "project-2": "b19d1a2f236d6934df89fbf610f5c2a77abb5ce3aded35026e67e47612ecf46c"
+  },
+  "scope": "local contract and synthetic fixture verification",
+  "source_sha256": {
+    "contracts/README.md": "50b25dfe2a2bd51f63e85c351af474242bf5a428d8911ffeda604a52542fb053",
+    "contracts/__init__.py": "e4b070dec19786b6611301ea67e8cd8d2ebb7ea1f9449d3f4b60f29f325b0936",
+    "contracts/api.py": "5d49d8186381e4d70c6c57c1c6183f27c70d88f5c79e30483f072bad0c4ac9b4",
+    "contracts/check.py": "1af2932fc6049086e20f6d5a7e565cab1205f0ae0017eb1ea42c091d59daca57",
+    "contracts/data.py": "30209323372ef27307dd99cc5b8dd2c3aa21b971561cb791906e1d44ac1f4465",
+    "contracts/examples/examples.json": "b5c761de28cda06122586b016580282711efb7cee3ecb3f60cfc8f7eabe7c22d",
+    "contracts/fixtures/__init__.py": "abec95c2b130141a0ce1024f8dd5b49e99852da057d5d34df5a2f260a4e8d255",
+    "contracts/fixtures/catalog.json": "357c67b3649f80f08467395d1292d0b545950089ddcdc8193e33af3792372e30",
+    "contracts/fixtures/generate.py": "5c126e347ff5e533981b8e8631bd2b8016f7068082b1f77cfad296e1a7a08556",
+    "contracts/openapi.json": "523ae7da4c8d8cc6a6c32929db6964579a957d49780a9928fe5182754d380aa6",
+    "contracts/schemas/data.schema.json": "e0b616cbcc69dc18f794949cb357f29962c1f9f970f4d892e36ba6da9007e428",
+    "contracts/tests/test_contract_integration.py": "a86846ce89e0da65a90f335d6d78ab69ff8d443a27be5e9da6f6567e7bea81ec",
+    "contracts/tests/test_data.py": "e715c42d21700001cb3eb60d5d3a6759aaab8e7b4b4bd0d2d4b7be408d2f6dbd",
+    "contracts/tests/test_openapi.py": "df48683c022e4daa4c659dab6a5605124cce259be232b6ca337004132c2c692a",
+    "requirements-contracts.lock": "53524155eef0e7fc306acef01035b7107f525c180c711622b7c0922b74316f47",
+    "requirements-contracts.txt": "a692813e28fcaf52be7d071f45f6c76dd9fd81850b770f1d41d7a540b0811c27"
+  },
+  "source_state": {
+    "base_commit": "4ebd8fb",
+    "branch": "phase7-contracts",
+    "identity": "source_sha256"
+  },
+  "verification": {
+    "aws_usage_from_checkpoint": 0,
+    "cloud_resources_created": false,
+    "contract_tests": {
+      "command": ".venv-contracts/bin/python -m pytest contracts/tests -q",
+      "passed": 101
+    },
+    "dependency_integrity": "passed: pip check in isolated environment",
+    "determinism": "tests compare every generated byte for same seed and reject differing pre-existing output",
+    "existing_frontend_syntax": "passed: npm run check (frontend/)",
+    "existing_frontend_tests": {
+      "command": "npm test",
+      "passed": 94,
+      "working_directory": "frontend"
+    },
+    "mutation": "detected: excluding click exactly at 30-minute attribution boundary"
+  },
+  "verification_date": "2026-11-10"
+}

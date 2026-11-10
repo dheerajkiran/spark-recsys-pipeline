@@ -1,14 +1,16 @@
 # Budget, recording, evidence, and teardown
 
-**Deployment mode:** one temporary recent-graduate portfolio AWS session on the confirmed **Free plan**. **User target:** less than **$10 total gross service usage**, including credit-funded usage, followed by teardown and no ongoing hosted service. **Status:** planned runbook; no resources or charges have been created by this documentation.
+**Deployment mode:** one temporary recent-graduate portfolio AWS session on the previously confirmed **Free plan**. **Budget updated November 10, 2026:** the user has made the reported **$100 AWS credit balance available to this project**, with $100 as the maximum and an instruction to spend comfortably below it. This supersedes the earlier small spending limit. Teardown and no ongoing hosted service remain the plan. **Status:** planned runbook; no resources or charges have been created by this documentation.
 
-This document is a release constraint for [checkpoints 7.10–7.12](checkpoints.md). The Free plan's provider controls do not enforce our smaller $5 project allowance. Prices, account quotas, other account usage, taxes, traffic, retries, and resources that fail to delete affect metered usage and remaining credits. AWS Budgets notifications use delayed billing data and are not a real-time project circuit breaker. [AWS budget guidance](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html)
+This document is a release constraint for [checkpoints 7.10–7.12](checkpoints.md). The Free plan's provider controls do not enforce this project's planning buffer. Prices, account quotas, other account usage, taxes, traffic, retries, and resources that fail to delete affect metered usage and remaining credits. AWS Budgets notifications use delayed billing data and are not a real-time project circuit breaker. [AWS budget guidance](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html)
 
 ### Funding and credit policy
 
-The user reports a new account with **$100 initial Free Tier credits** and confirms the **Free plan**. This balance has not been independently checked. The project will preserve most of those credits: its normal usage allowance remains **$5**, with the existing **$9 envelope including reserves**. Receiving credits does not authorize a larger run, more training attempts, or a Paid-plan upgrade.
+The user reports a new account with **$100 initial Free Tier credits** and previously confirmed the **Free plan**. This balance has not been independently checked. The November 10 clarification makes those credits available for the project; it does not require spending them. Keep the existing small serverless workload as the starting design and estimate its actual needs. A Paid-plan upgrade, larger infrastructure, and an always-running deployment are not implied by the new budget.
 
-Before deploying, verify the actual available balance, expiration date, selected region, eligible services, and permissions in that account. Keep separate ledger columns for **gross usage**, **credits applied**, **remaining credits**, and **cash charges**. Aim for zero out-of-pocket cost for eligible credit-covered usage, without representing promotional credit as cash or subtracting it from the gross usage limit. [AWS plan comparison](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html)
+Before deploying, verify the actual available balance, credit expiration date, Free-plan end date, selected region, eligible services, and permissions in that account. AWS's Free plan ends after six months or credit depletion, whichever comes first; an unused balance alone does not establish that the planned deployment date is supported. Keep separate ledger columns for **gross usage**, **credits applied**, **remaining credits**, and **cash charges**. Aim for zero out-of-pocket cost for eligible credit-covered usage, without representing promotional credit as cash or subtracting it from gross project usage. [AWS plan comparison](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html)
+
+**Planning default, chosen to preserve headroom:** keep a **$20 unallocated buffer** for delayed metering and cleanup. Stop new billable work before estimated cumulative project usage, including unfinished work and cleanup, reaches **$80**. Also require estimated remaining work to leave at least $20 of the verified remaining credits unused, adjusting for account usage not yet reflected in that balance. Check cumulative usage against the original project ceiling and remaining work against remaining credits separately, so already-posted charges are not subtracted twice. These are engineering guardrails, not user-requested spend targets or an enforced billing cap. Set a smaller session estimate during preflight and stop to reconcile if it is exceeded.
 
 The new signup service list places **AWS Glue on the Free plan** and **Amazon EMR on the Paid plan**. This plan therefore proposes a bounded Glue Spark ETL job; actual job/API/quota access remains an account preflight gate. Do not activate Paid plan or advanced features to bypass a failed check. Local rehearsal can continue while any service-access issue is resolved. [AWS service availability](https://docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html)
 
@@ -28,7 +30,7 @@ These are proposed implementation limits. They must be enforced in configuration
 |---|---|
 | Environment | One AWS account and one selected region; `us-east-1` is the initial pricing assumption |
 | Audience | Owner-controlled test identities, two isolation-test projects, one isolated public-demo project |
-| Data | Seeded fixture around 100 users/100 items/10,000 mature impressions; exact size fixed after local rehearsal |
+| Data | Per project: 100 synthetic users, eight distinct bundled playable items, 10,000 impressions; 9,944 mature rows after split-boundary purging in the default 7.1 fixture |
 | Training input | At most 50 MiB staged per training run; bounded files/rows and checked uncompressed size |
 | Artifacts | Model bundle at most 10 MiB; total live dataset/artifact object storage target below 1 GiB |
 | Spark | One Glue Spark ETL job; two `G.1X` workers = 2 DPUs (nominal 8 vCPU/32 GB total); candidate runtime pinned to Glue 5.0 |
@@ -50,29 +52,29 @@ If the rehearsed fixture does not fit, reduce the fixture/settings and update th
 
 ## 3. Cost preflight and reserve
 
-Calculate gross usage using standard on-demand rates before applying any Free Tier allowance or promotional credits. Then record eligible credits separately using the verified account balance. Preserve the under-$10 gross target even if credits cover the whole run. Avoid commitments, subscriptions, paid domains, and recurring purchases. In particular, choose **CloudFront pay-as-you-go, with no flat-rate plan**: a subscribed distribution cannot be deleted until that plan has been cancelled and its current billing cycle ends. [CloudFront deletion requirements](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/HowToDeleteDistribution.html)
+Calculate gross usage using standard on-demand rates before applying any Free Tier allowance or promotional credits. Then record eligible credits separately using the verified account balance. Keep cumulative project usage below $80 and estimated remaining work below verified remaining credits minus the $20 buffer, accounting for pending charges. Avoid commitments, subscriptions, paid domains, and recurring purchases. In particular, choose **CloudFront pay-as-you-go, with no flat-rate plan**: a subscribed distribution cannot be deleted until that plan has been cancelled and its current billing cycle ends. [CloudFront deletion requirements](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/HowToDeleteDistribution.html)
 
-The following is a conservative **allocation worksheet**, not an AWS quote or a measured bill. Fill in actual rates and expected usage before checkpoint 7.11.
+The following is a **preflight worksheet**, not an AWS quote or a measured bill. Fill in actual rates and expected usage before checkpoint 7.11; the available credits do not establish how much the workload costs.
 
-| Category | Initial allowance | What the estimate must include |
-|---|---:|---|
-| Bounded Glue run | $1.00 | Two-worker DPU usage, billable startup/runtime, temporary storage and ancillary requests; no automatic job retries |
-| All Lambda functions | $0.75 | API, ranker initialization and scoring, training, stream/reconciliation handlers, auth work, and allocated ephemeral storage |
-| HTTP/workflow/identity | $0.50 | API Gateway, Step Functions transitions/retries, Cognito usage/features; disable SMS and unneeded paid options |
-| Object/database/registry storage | $0.75 | S3 requests/versions, DynamoDB units/indexes/transactions/Streams consumers, ECR images, and any bootstrap state storage |
-| Frontend and transfer | $0.75 | CloudFront requests/transfer, S3 reads, media download, and any regional transfer charges |
-| Logs, alarms, and cleanup overhead | $0.50 | Ingestion/storage, bounded telemetry, stop mechanism, deletion delays, and residual storage |
-| Unallocated usage headroom | $0.75 | Small metering differences and incidental usage identified by preflight |
-| **Maximum planned usage subtotal** | **$5.00** | Reduce scope if the regional calculation exceeds this subtotal |
-| Taxes/currency/payment headroom | **up to $2.00** | Replace with the account's actual tax/currency assumptions |
-| Failure/cleanup contingency | **up to $2.00** | Use only after checking consumed resource estimates; not permission for another run |
-| **Planning envelope** | **$9.00** | Leaves margin below the user's $10 target; not an enforced account cap |
+| Category | What the estimate must include |
+|---|---|
+| Bounded Glue run | Two-worker DPU usage, billable startup/runtime, temporary storage and ancillary requests; no automatic job retries |
+| All Lambda functions | API, ranker initialization and scoring, training, stream/reconciliation handlers, auth work, and allocated ephemeral storage |
+| HTTP/workflow/identity | API Gateway, Step Functions transitions/retries, Cognito usage/features; disable SMS and unneeded paid options |
+| Object/database/registry storage | S3 requests/versions, DynamoDB units/indexes/transactions/Streams consumers, ECR images, and any bootstrap state storage |
+| Frontend and transfer | CloudFront requests/transfer, S3 reads, media download, and any regional transfer charges |
+| Logs, alarms, and cleanup overhead | Ingestion/storage, bounded telemetry, stop mechanism, deletion delays, and residual storage |
+| Taxes and incidental usage | Account-specific tax/currency assumptions, coverage exclusions, and small metering differences |
+| **Session estimate** | Sum of the refreshed regional quantities and rates, kept as low as practical |
+| **Cumulative project estimate** | Earlier project usage plus the session, unfinished work, and cleanup; avoid double-counting |
+| **Unallocated planning buffer** | **$20**; preserve it under both the original project ceiling and verified remaining credits |
+| **Stop-new-work threshold** | Before **$80 cumulative project usage**, or earlier if remaining work cannot preserve the credit buffer |
 
-Do not force an expense into an allowance when the regional estimate is higher. A launch requires a refreshed estimate, including taxes and reserve, that still targets less than $10. If the account has unrelated resources, separate their costs and record whether the user's target covers only this project or the whole account; never hide them in a portfolio cost claim.
+A launch requires a refreshed estimate that preserves the planning buffer and covers any non-credit-eligible amounts. If the account has unrelated resources, account for their effect on remaining credits separately; never hide them in a portfolio cost claim. No credit balance or worksheet guarantees zero cash charges.
 
 ### Working estimate for building and the one-time run
 
-As of November 2, 2026, a reasonable planning range for a successful tiny AWS recording session is **$1–$3 in usage before tax**, assuming the workload envelope above, local image builds, no paid subscriptions, and prompt complete teardown. This is an engineering estimate with headroom, not a quote or measured bill. Keep the **$5 usage allowance** and **$9 total reserve envelope** rather than treating the expected range as a hard limit.
+The original November 2, 2026 planning range for a successful tiny AWS recording session was **$1–$3 in usage before tax**, assuming the workload envelope above, local image builds, no paid subscriptions, and prompt complete teardown. On November 10, a **$20 total conservative planning allowance** was proposed for the same scope, including contingency for deployment issues and cleanup. This is an allowance, not a calculated worst-case upper bound, current quote, or measured bill. It is separate from the $20 unallocated buffer below the overall credit ceiling. The budget increase provides headroom without establishing a reason to consume the credits. Refresh the complete estimate before launch.
 
 | Example component | Assumed use | Illustrative cost before other services |
 |---|---|---:|
@@ -83,7 +85,7 @@ As of November 2, 2026, a reasonable planning range for a successful tiny AWS re
 
 These examples use published regional examples: Glue Spark ETL at `$0.44/DPU-hour` gives `2 × 0.25 × $0.44 = $0.22`; Lambda x86 compute is illustrated at `$0.0000166667/GB-second`, and HTTP API at `$1/million` small calls. Reconfirm rates for the selected region. The assumed inference duration is not measured; initialization, dispatcher/API functions, retries, workflows, DynamoDB, identity, images, storage, logs, and delivery add to these component values. The former EMR component estimate is superseded by this Free-plan Glue proposal. [Glue pricing](https://aws.amazon.com/glue/pricing/), [Lambda pricing](https://aws.amazon.com/lambda/pricing/), [API Gateway pricing](https://aws.amazon.com/api-gateway/pricing/)
 
-The local build requires **no additional paid development software** under this plan, assuming an existing capable computer, internet connection, and development tools. Developer time, electricity, existing subscriptions, and any separately metered AI assistance are excluded. No hired-developer or labor estimate is included. After every project resource is removed, the target recurring AWS charge is **$0**; previously incurred charges can still appear later as billing settles.
+The local build requires **no additional paid development software** under this plan, assuming an existing capable computer, internet connection, and development tools. Developer time, electricity, and existing subscriptions are excluded. No hired-developer or labor estimate is included. After every project resource is removed, the target recurring AWS charge is **$0**; previously incurred charges can still appear later as billing settles.
 
 ### Calculations to record
 
@@ -116,7 +118,7 @@ Save the price date, region, selected service options, rates, input quantities, 
 6. **Stop independently.** Prepare a tested stop command that disables new jobs/demo mutations, turns off stream/schedule triggers as needed, and stops active workflows and Glue job runs. A timed stop can supplement it but must be scoped and tested; it cannot replace supervised teardown.
 7. **Track time and estimated use directly.** The session owner watches the wall clock and launched work. Do not wait for a billing alert before stopping. A small budget alert can provide additional notification; confirm any selected alert/action feature's cost.
 
-Set a stop decision when the estimated consumed-plus-unfinished usage reaches the $5 planned-usage envelope, when an unplanned resource appears, or when the four-hour session window is reached. Preserve evidence and tear down rather than broadening the deployment.
+Stop new billable work before estimated cumulative project usage, including unfinished work and cleanup, reaches $80, or earlier if remaining work cannot preserve the $20 credit buffer. Also stop when an unplanned resource appears or the four-hour session window is reached. If the smaller preflight session estimate is exceeded, stop and reconcile before continuing. Include delayed metering in the remaining budget; preserve evidence and finish teardown.
 
 ## 5. Local rehearsal before the cloud session
 
@@ -198,7 +200,7 @@ Terraform state and provider credentials can contain sensitive configuration. St
 
 | Problem | Response |
 |---|---|
-| Preflight estimate plus reserve cannot target under $10 | Reduce assets/data/work or keep the presentation local; do not launch an unbounded estimate |
+| Cumulative preflight estimate cannot preserve the planning buffer below the verified credit ceiling | Reduce assets/data/work or keep the presentation local; do not launch an unbounded estimate |
 | Glue/Lambda service access, quota, or dependency mismatch | Stop before the recording run, preserve the error, adjust locally; no automatic plan upgrade or advanced-feature activation |
 | Model cold start exceeds the HTTP integration limit | Show honest unavailable/loading behavior, document the result, and return to local design work |
 | Training reaches its timeout | Record failure and stop; do not automatically launch another full run |

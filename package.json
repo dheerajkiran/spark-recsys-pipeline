@@ -1,0 +1,22 @@
+{
+  "name": "loop-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["services/api"],
+  "engines": { "node": ">=22.13.0 <23" },
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "lint": "eslint services/api",
+    "test": "npm run test --workspaces",
+    "dev": "npm run dev --workspace @loop/api"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "eslint": "9.39.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.4"
+  }
+}

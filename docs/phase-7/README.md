@@ -1,10 +1,10 @@
 # Phase 7 — AWS recommendation platform
 
-**Status:** Planned; documentation checkpoint only. No Phase 7 application, infrastructure, cloud deployment, or production results are implemented by this plan. Phases 0–6 remain the reproducible research foundation.
+**Status:** In progress. Checkpoint 7.1 provides [executable contracts and synthetic fixtures](../../contracts/README.md), with [local completion evidence](completions/7.1.md). Checkpoint 7.2 provides the [local API, storage, workflow, and CPU image foundation](completions/7.2.md). Identity, customer data flows, infrastructure, cloud deployment, and platform ML results remain planned. Phases 0–6 remain the reproducible research foundation.
 
-**Planning date:** November 2, 2026. **Deployment constraint:** a recent-graduate portfolio project with a target of **less than $10 total AWS usage**, including usage paid by credits, one short recording session, then teardown. This replaces the earlier suggestion of an always-running ECS/RDS deployment.
+**Planning date:** November 2, 2026; budget updated November 10, 2026. **Deployment constraint:** a recent-graduate portfolio project with **up to $100 in reported AWS credits available**, aiming to spend comfortably below that maximum, one short recording session, then teardown. This replaces the earlier small spending limit; the temporary deployment still replaces the earlier suggestion of always-running ECS/RDS.
 
-**Funding update:** the user reports a new AWS account with **$100 initial credits** and confirms it is on the **Free plan**. The balance/expiry and account-specific service access have not been independently verified. The project keeps its **$5 normal usage allowance and $9 envelope including reserves**; the credit balance does not increase the approved spend. AWS Glue is the proposed Spark provider for this Free-plan deployment, subject to account preflight. EMR requires a Paid plan in AWS's new signup service list and is deferred. [AWS service availability](https://docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html)
+**Funding update:** the user reports a new AWS account with **$100 initial credits** and previously confirmed the **Free plan**. On November 10, the user authorized using those credits for this project while asking not to approach exhaustion. The balance/expiry and account-specific service access have not been independently verified. The [budget runbook](budget-and-recording.md) keeps a planning buffer and requires a fresh estimate; the credit ceiling is not an expected spend. AWS Glue remains the proposed Spark provider for this Free-plan deployment, subject to account preflight. EMR requires a Paid plan in AWS's new signup service list and is deferred. [AWS service availability](https://docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html)
 
 ## 1. The next phase
 
@@ -167,17 +167,18 @@ Describe a synthetic fixture as synthetic. Preserve original KuaiRand benchmark 
 
 ## 10. Decisions and open details
 
-Confirmed by the user: all three experiences, AWS backend, frontend stack chosen for fit, recent-graduate portfolio budget under $10 total, recording once, GitHub evidence, teardown afterward, a new Free-plan account with a reported $100 credit balance, and a preference to preserve most of those credits.
+Confirmed by the user: all three experiences, AWS backend, frontend stack chosen for fit, recording once, GitHub evidence, teardown afterward, and a new account with a reported $100 credit balance available to the project. The November 10 budget clarification replaces the previous small spending limit: $100 is the maximum, and spending should stay comfortably below it. The previously confirmed Free plan remains the deployment assumption.
 
 Planning defaults: `us-east-1` for initial pricing comparison; an owner-controlled Cognito account plus a second isolation-test account; synthetic interaction fixtures joined to a small attributed catalog; no domain purchase; and a maximum four-hour cloud session. These are configurable assumptions, not existing AWS account settings.
 
-Before the cloud checkpoint, identify the intended AWS account/region, verify the actual credit balance/expiry, eligible services, Glue/Lambda quotas, current prices, and choose the recording destination. Record gross service usage separately from credits applied and any out-of-pocket charges. Stay on the Free plan; activating Paid plan or advanced features is outside the current deployment profile. If a required operation is unavailable, pause that cloud step and resolve the design locally. Those details do not block local implementation. Provisioning AWS resources is not performed by writing this plan.
+Before the cloud checkpoint, identify the intended AWS account/region, verify the actual credit balance/expiry, Free-plan end date, eligible services, Glue/Lambda quotas, current prices, and choose the recording destination. Record gross service usage separately from credits applied and any out-of-pocket charges. Stay on the Free plan; activating Paid plan or advanced features is outside the current deployment profile. If a required operation is unavailable, pause that cloud step and resolve the design locally. Those details do not block local implementation. Provisioning AWS resources is not performed by writing this plan.
 
 ## 11. Phase status
 
 - [x] Document the product, architecture, contracts, checkpoint plan, and budget/recording approach.
-- [ ] Complete checkpoints 7.1–7.10 locally and prepare the cloud run.
+- [x] Complete checkpoint 7.1: contracts, fixture generator, decisions, and local verification.
+- [ ] Complete checkpoints 7.2–7.10 locally and prepare the cloud run.
 - [ ] Complete the recorded AWS proof in checkpoint 7.11.
 - [ ] Complete teardown and portfolio evidence in checkpoint 7.12.
 
-The phase remains **planned** until implementation begins. Planning documents are not evidence that the platform already exists.
+The phase is **in progress**; only checkpoint 7.1 is complete locally. Contract verification does not establish that the platform application or AWS deployment exists.

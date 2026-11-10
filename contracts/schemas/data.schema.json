@@ -1,0 +1,555 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loop.example/contracts/data.schema.json",
+  "title": "Loop recommendation-v1 contracts",
+  "$defs": {
+    "ExternalId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "ResourceId": {
+      "type": "string",
+      "pattern": "^[a-z]{3}_[0-9a-f]{32}$(?![\\s\\S])",
+      "minLength": 36,
+      "maxLength": 36
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+    },
+    "Item": {
+      "type": "object",
+      "properties": {
+        "item_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "creator_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "topic": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        }
+      },
+      "required": [
+        "item_id",
+        "published_at",
+        "active"
+      ],
+      "additionalProperties": false
+    },
+    "EventInput": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "event_type": {
+          "enum": [
+            "impression",
+            "click",
+            "watch"
+          ]
+        },
+        "user_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "item_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        },
+        "impression_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "request_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "session_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "watch_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        }
+      },
+      "required": [
+        "event_id",
+        "event_type",
+        "user_id",
+        "item_id",
+        "occurred_at",
+        "impression_id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "watch"
+              }
+            },
+            "required": [
+              "event_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "watch_ms"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "watch_ms"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Event": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "event_type": {
+          "enum": [
+            "impression",
+            "click",
+            "watch"
+          ]
+        },
+        "user_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "item_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        },
+        "impression_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "request_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "session_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "watch_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "received_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "event_id",
+        "event_type",
+        "user_id",
+        "item_id",
+        "occurred_at",
+        "impression_id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "watch"
+              }
+            },
+            "required": [
+              "event_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "watch_ms"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "watch_ms"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "User": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "$ref": "#/$defs/ExternalId"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "user_id"
+      ],
+      "additionalProperties": false
+    },
+    "LabelPolicy": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": "click-v1"
+        },
+        "attribution_seconds": {
+          "const": 1800
+        },
+        "lateness_seconds": {
+          "const": 86400
+        }
+      },
+      "required": [
+        "version",
+        "attribution_seconds",
+        "lateness_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "SplitCutoffs": {
+      "type": "object",
+      "properties": {
+        "train_start": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        },
+        "validation_start": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        },
+        "test_start": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        },
+        "test_end": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "train_start",
+        "validation_start",
+        "test_start",
+        "test_end"
+      ],
+      "additionalProperties": false
+    },
+    "Provenance": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "synthetic",
+            "imported",
+            "real_browser"
+          ]
+        },
+        "generator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "MediaCatalog": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": "demo-media-v1"
+        },
+        "provenance": {
+          "const": "bundled_licensed_media"
+        },
+        "attribution_document": {
+          "const": "frontend/assets/MEDIA.md"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "properties": {
+              "item_id": {
+                "$ref": "#/$defs/ExternalId"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "topic": {
+                "enum": [
+                  "Nature",
+                  "Travel",
+                  "Food",
+                  "Design",
+                  "Science"
+                ]
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 86400000
+              },
+              "video_path": {
+                "type": "string",
+                "pattern": "^frontend/assets/media/[a-z0-9-]+\\.mp4$(?![\\s\\S])"
+              },
+              "poster_path": {
+                "type": "string",
+                "pattern": "^frontend/assets/media/[a-z0-9-]+\\.jpg$(?![\\s\\S])"
+              },
+              "source_url": {
+                "type": "string",
+                "format": "uri",
+                "pattern": "^https://"
+              },
+              "license_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "license_url": {
+                "type": "string",
+                "format": "uri",
+                "pattern": "^https://"
+              },
+              "video_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+              },
+              "poster_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "item_id",
+              "title",
+              "topic",
+              "duration_ms",
+              "video_path",
+              "poster_path",
+              "source_url",
+              "license_name",
+              "license_url",
+              "video_sha256",
+              "poster_sha256"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "version",
+        "provenance",
+        "attribution_document",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "DatasetManifest": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "recommendation-v1"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^prj_[0-9a-f]{32}$(?![\\s\\S])"
+        },
+        "dataset_id": {
+          "type": "string",
+          "pattern": "^dts_[0-9a-f]{32}$(?![\\s\\S])"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "availability_mode": {
+          "enum": [
+            "recorded_arrival",
+            "event_time_only"
+          ]
+        },
+        "label_policy": {
+          "$ref": "#/$defs/LabelPolicy"
+        },
+        "split_cutoffs": {
+          "$ref": "#/$defs/SplitCutoffs"
+        },
+        "extraction_watermark": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+        },
+        "timestamp_range": {
+          "type": "object",
+          "properties": {
+            "start": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+            },
+            "end": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "additionalProperties": false
+        },
+        "files": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "enum": [
+                  "items.csv",
+                  "events.csv",
+                  "users.csv"
+                ]
+              },
+              "byte_length": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 52428800
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+              },
+              "row_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000
+              }
+            },
+            "required": [
+              "name",
+              "byte_length",
+              "sha256",
+              "row_count"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "auxiliary_files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "enum": [
+                  "media.json"
+                ]
+              },
+              "byte_length": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 262144
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+              },
+              "row_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000
+              }
+            },
+            "required": [
+              "name",
+              "byte_length",
+              "sha256",
+              "row_count"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schema_version",
+        "project_id",
+        "dataset_id",
+        "provenance",
+        "availability_mode",
+        "label_policy",
+        "split_cutoffs",
+        "extraction_watermark",
+        "timestamp_range",
+        "files"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

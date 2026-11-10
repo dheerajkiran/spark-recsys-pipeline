@@ -1,0 +1,111 @@
+{
+  "version": "demo-media-v1",
+  "provenance": "bundled_licensed_media",
+  "attribution_document": "frontend/assets/MEDIA.md",
+  "items": [
+    {
+      "item_id": "coast-sunset",
+      "title": "Drone tour of a coast at sunset",
+      "topic": "Nature",
+      "duration_ms": 28000,
+      "video_path": "frontend/assets/media/coast-sunset.mp4",
+      "poster_path": "frontend/assets/media/coast-sunset.jpg",
+      "source_url": "https://mixkit.co/free-stock-video/drone-tour-of-a-coast-at-sunset-44405/",
+      "license_name": "Mixkit Stock Video Free License",
+      "license_url": "https://mixkit.co/license/#videoFree",
+      "video_sha256": "40d6d8e3df9f6ab3dceea6c42b962167cb4e25c83f424188bb1ee2c8eee00a3f",
+      "poster_sha256": "80483846f7e16d68cd62a1c52ab8cdad401bfc639eccb7d7ddf25fdc36eccd3c"
+    },
+    {
+      "item_id": "mountain-air",
+      "title": "Flying over a mountainous area",
+      "topic": "Travel",
+      "duration_ms": 33908,
+      "video_path": "frontend/assets/media/mountains.mp4",
+      "poster_path": "frontend/assets/media/mountains.jpg",
+      "source_url": "https://mixkit.co/free-stock-video/flying-over-a-mountainous-area-43130/",
+      "license_name": "Mixkit Stock Video Free License",
+      "license_url": "https://mixkit.co/license/#videoFree",
+      "video_sha256": "8f3cd82ae260ec330114ba01f03961778d5bceb718a917f01dc46adc5a827929",
+      "poster_sha256": "49f77dc81143771938ebb893618ec2d5cf889b016aecaa87856fc970fa18bb8b"
+    },
+    {
+      "item_id": "coffee-ritual",
+      "title": "Latte art",
+      "topic": "Food",
+      "duration_ms": 34000,
+      "video_path": "frontend/assets/media/coffee.mp4",
+      "poster_path": "frontend/assets/media/coffee.jpg",
+      "source_url": "https://mixkit.co/free-stock-video/latte-art-810/",
+      "license_name": "Mixkit Stock Video Free License",
+      "license_url": "https://mixkit.co/license/#videoFree",
+      "video_sha256": "872b69ea00f22e8976f3043406f2e34d23f837eb27529943af05cbe67b7a9f27",
+      "poster_sha256": "edd088ea7821de877a5aa29287affc6990a646f6378f984b3a169c4aae023742"
+    },
+    {
+      "item_id": "tokyo-after-dark",
+      "title": "Pedestrian walk in Tokyo",
+      "topic": "Travel",
+      "duration_ms": 18960,
+      "video_path": "frontend/assets/media/tokyo.mp4",
+      "poster_path": "frontend/assets/media/tokyo.jpg",
+      "source_url": "https://mixkit.co/free-stock-video/pedestrian-walk-in-tokyo-4231/",
+      "license_name": "Mixkit Stock Video Free License",
+      "license_url": "https://mixkit.co/license/#videoFree",
+      "video_sha256": "dfdc14fba8ae98de749b1a9a911f051110ec5aba0deb66cc7a37f95ddd948f16",
+      "poster_sha256": "5e85f3e3deefd480c4b6d56c2c84c0ee2627015e7aef428d0978e89730657799"
+    },
+    {
+      "item_id": "ink-in-motion",
+      "title": "Abstract video of a liquid with dark ink flowing",
+      "topic": "Design",
+      "duration_ms": 17392,
+      "video_path": "frontend/assets/media/ink.mp4",
+      "poster_path": "frontend/assets/media/ink.jpg",
+      "source_url": "https://mixkit.co/free-stock-video/abstract-video-of-a-liquid-with-dark-ink-flowing-44818/",
+      "license_name": "Mixkit Stock Video Free License",
+      "license_url": "https://mixkit.co/license/#videoFree",
+      "video_sha256": "54ea464bd880a459305086f897229faf6614d1d86c5538295f2f2bed3f2d9192",
+      "poster_sha256": "5779f45aabc10daea52e9ce65165476220df7f94a2f456d12ed64ca234d838a0"
+    },
+    {
+      "item_id": "northern-lights",
+      "title": "Aurora borealis at dawn",
+      "topic": "Science",
+      "duration_ms": 11633,
+      "video_path": "frontend/assets/media/aurora.mp4",
+      "poster_path": "frontend/assets/media/aurora.jpg",
+      "source_url": "https://mixkit.co/free-stock-video/aurora-borealis-at-dawn-4040/",
+      "license_name": "Mixkit Stock Video Free License",
+      "license_url": "https://mixkit.co/license/#videoFree",
+      "video_sha256": "4e6ee060c28b24e161fe5c2052e8912e99a1a6212de5af59694c554c7ac3b596",
+      "poster_sha256": "51b3aa54bd489b35d51c0bf386c9ab6e7c5d7c9a5b9492852d3e2686c4355a83"
+    },
+    {
+      "item_id": "forest-pause",
+      "title": "Gloomy forest full of trees during a rainy afternoon",
+      "topic": "Nature",
+      "duration_ms": 11292,
+      "video_path": "frontend/assets/media/forest.mp4",
+      "poster_path": "frontend/assets/media/forest.jpg",
+      "source_url": "https://mixkit.co/free-stock-video/gloomy-forest-full-of-trees-during-a-rainy-afternoon-22729/",
+      "license_name": "Mixkit Stock Video Free License",
+      "license_url": "https://mixkit.co/license/#videoFree",
+      "video_sha256": "4a9aef60630e5e37544a0eafa05778d022953cf863059d6f7563565abf8775fb",
+      "poster_sha256": "da65a70b3bc25bf84698b4950d0bf9fcb105dcef3b3a27da88b02055c1517749"
+    },
+    {
+      "item_id": "a-million-little-lights",
+      "title": "View of the night sky filled with stars",
+      "topic": "Science",
+      "duration_ms": 11678,
+      "video_path": "frontend/assets/media/stars.mp4",
+      "poster_path": "frontend/assets/media/stars.jpg",
+      "source_url": "https://mixkit.co/free-stock-video/view-of-the-night-sky-filled-with-stars-39770/",
+      "license_name": "Mixkit Stock Video Free License",
+      "license_url": "https://mixkit.co/license/#videoFree",
+      "video_sha256": "1acf3099fa4e81b30c7316f24601f3bd56d85e2faca5cef7ea20b8dc355b317c",
+      "poster_sha256": "c804d9dc8a2e41a25064dae7a80bc973136c199d8f344b7f2970a8edf1abc5be"
+    }
+  ]
+}

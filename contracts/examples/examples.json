@@ -1,0 +1,379 @@
+[
+  {
+    "name": "create-project",
+    "kind": "request",
+    "path": "/v1/projects",
+    "method": "post",
+    "value": {
+      "name": "Synthetic video demo"
+    }
+  },
+  {
+    "name": "project-created",
+    "kind": "response",
+    "path": "/v1/projects",
+    "method": "post",
+    "value": {
+      "project": {
+        "project_id": "prj_11111111111111111111111111111111",
+        "name": "Synthetic video demo",
+        "role": "owner",
+        "created_at": "2026-10-01T12:00:00Z"
+      },
+      "request_id": "req_55555555555555555555555555555555"
+    },
+    "status": 201
+  },
+  {
+    "name": "declare-dataset",
+    "kind": "request",
+    "path": "/v1/projects/{project_id}/datasets",
+    "method": "post",
+    "value": {
+      "schema_version": "recommendation-v1",
+      "files": [
+        {
+          "name": "items.csv",
+          "byte_length": 4096,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "name": "events.csv",
+          "byte_length": 1048576,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "name": "users.csv",
+          "byte_length": 2048,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "extraction_watermark": "2026-10-10T00:00:00Z",
+      "split_cutoffs": {
+        "train_start": "2026-10-01T00:00:00Z",
+        "validation_start": "2026-10-05T00:00:00Z",
+        "test_start": "2026-10-07T00:00:00Z",
+        "test_end": "2026-10-09T00:00:00Z"
+      },
+      "availability_mode": "recorded_arrival",
+      "provenance": {
+        "kind": "synthetic",
+        "generator": "recommendation-v1",
+        "seed": 7101,
+        "note": "Seeded demonstration data; no real-user quality claim."
+      }
+    }
+  },
+  {
+    "name": "upsert-items",
+    "kind": "request",
+    "path": "/v1/projects/{project_id}/items",
+    "method": "post",
+    "value": {
+      "items": [
+        {
+          "item_id": "coast-sunset",
+          "published_at": "2026-09-01T00:00:00Z",
+          "active": true,
+          "topic": "Nature",
+          "duration_ms": 28000
+        }
+      ]
+    }
+  },
+  {
+    "name": "linked-click",
+    "kind": "request",
+    "path": "/v1/projects/{project_id}/events",
+    "method": "post",
+    "value": {
+      "events": [
+        {
+          "event_id": "evt_click_0001",
+          "event_type": "click",
+          "user_id": "viewer_0001",
+          "item_id": "coast-sunset",
+          "occurred_at": "2026-10-01T12:00:05Z",
+          "impression_id": "imp_0001",
+          "request_id": "req_55555555555555555555555555555555"
+        }
+      ]
+    }
+  },
+  {
+    "name": "foreign-impression-error",
+    "kind": "response",
+    "path": "/v1/projects/{project_id}/events",
+    "method": "post",
+    "value": {
+      "code": "invalid_request",
+      "message": "The impression must belong to this project, user, and item.",
+      "request_id": "req_55555555555555555555555555555555",
+      "details": [
+        {
+          "field": "events[0].impression_id",
+          "code": "unknown_impression",
+          "message": "No matching exposed impression exists."
+        }
+      ]
+    },
+    "status": 400
+  },
+  {
+    "name": "start-training",
+    "kind": "request",
+    "path": "/v1/projects/{project_id}/training-jobs",
+    "method": "post",
+    "value": {
+      "dataset_id": "dts_22222222222222222222222222222222",
+      "model_family": "deepfm",
+      "settings": {
+        "epochs": 3,
+        "seed": 7101
+      }
+    }
+  },
+  {
+    "name": "training-accepted",
+    "kind": "response",
+    "path": "/v1/projects/{project_id}/training-jobs",
+    "method": "post",
+    "value": {
+      "resource_id": "job_33333333333333333333333333333333",
+      "status": "accepted",
+      "status_url": "/v1/projects/prj_11111111111111111111111111111111/training-jobs/job_33333333333333333333333333333333",
+      "request_id": "req_55555555555555555555555555555555"
+    },
+    "status": 202
+  },
+  {
+    "name": "promote-model",
+    "kind": "request",
+    "path": "/v1/projects/{project_id}/deployments",
+    "method": "post",
+    "value": {
+      "model_version": "mdl_44444444444444444444444444444444",
+      "expected_generation": 0
+    }
+  },
+  {
+    "name": "deployment-active",
+    "kind": "response",
+    "path": "/v1/projects/{project_id}/deployments",
+    "method": "get",
+    "value": {
+      "deployment": {
+        "deployment_id": "dep_77777777777777777777777777777777",
+        "model_version": "mdl_44444444444444444444444444444444",
+        "generation": 1,
+        "status": "active",
+        "previous_model_version": null,
+        "created_at": "2026-10-01T12:00:00Z"
+      },
+      "request_id": "req_55555555555555555555555555555555"
+    },
+    "status": 200
+  },
+  {
+    "name": "recommend",
+    "kind": "request",
+    "path": "/v1/projects/{project_id}/recommendations",
+    "method": "post",
+    "value": {
+      "user_id": "viewer_0001",
+      "limit": 10,
+      "context": {
+        "surface": "home"
+      }
+    }
+  },
+  {
+    "name": "deepfm-recommendations",
+    "kind": "response",
+    "path": "/v1/projects/{project_id}/recommendations",
+    "method": "post",
+    "value": {
+      "request_id": "req_55555555555555555555555555555555",
+      "strategy": "deepfm",
+      "model_version": "mdl_44444444444444444444444444444444",
+      "deployment_generation": 1,
+      "feature_version": "platform-v1",
+      "feature_snapshot_id": "snp_88888888888888888888888888888888",
+      "context_at": "2026-10-01T12:00:00Z",
+      "fallback_reason": null,
+      "items": [
+        {
+          "item_id": "coast-sunset",
+          "rank": 1,
+          "impression_id": "imp_0001",
+          "score": 0.72
+        }
+      ],
+      "baseline_version": null
+    },
+    "status": 200
+  },
+  {
+    "name": "baseline-recommendations",
+    "kind": "response",
+    "path": "/v1/projects/{project_id}/recommendations",
+    "method": "post",
+    "value": {
+      "request_id": "req_55555555555555555555555555555555",
+      "strategy": "baseline",
+      "model_version": null,
+      "deployment_generation": 0,
+      "feature_version": "platform-v1",
+      "feature_snapshot_id": "snp_88888888888888888888888888888888",
+      "context_at": "2026-10-01T12:00:00Z",
+      "fallback_reason": "no_active_model",
+      "items": [
+        {
+          "item_id": "coast-sunset",
+          "rank": 1,
+          "impression_id": "imp_0001",
+          "score": null
+        }
+      ],
+      "baseline_version": "popularity-v1"
+    },
+    "status": 200
+  },
+  {
+    "name": "issue-key",
+    "kind": "request",
+    "path": "/v1/projects/{project_id}/api-keys",
+    "method": "post",
+    "value": {
+      "name": "Example integration",
+      "scopes": [
+        "recommendations:read"
+      ],
+      "expires_at": "2026-10-02T12:00:00Z"
+    }
+  },
+  {
+    "name": "key-issued-once",
+    "kind": "response",
+    "path": "/v1/projects/{project_id}/api-keys",
+    "method": "post",
+    "value": {
+      "key": {
+        "key_id": "key_66666666666666666666666666666666",
+        "name": "Example integration",
+        "scopes": [
+          "recommendations:read"
+        ],
+        "masked_key": "loop_****DEMO",
+        "expires_at": "2026-10-02T12:00:00Z",
+        "revoked": false
+      },
+      "secret": "EXAMPLE_ONLY_NOT_A_VALID_API_KEY_0000",
+      "request_id": "req_55555555555555555555555555555555"
+    },
+    "status": 201
+  },
+  {
+    "name": "key-idempotent-replay",
+    "kind": "response",
+    "path": "/v1/projects/{project_id}/api-keys",
+    "method": "post",
+    "value": {
+      "key": {
+        "key_id": "key_66666666666666666666666666666666",
+        "name": "Example integration",
+        "scopes": [
+          "recommendations:read"
+        ],
+        "masked_key": "loop_****DEMO",
+        "expires_at": "2026-10-02T12:00:00Z",
+        "revoked": false
+      },
+      "secret": null,
+      "request_id": "req_55555555555555555555555555555555"
+    },
+    "status": 201
+  },
+  {
+    "name": "demo-session-request",
+    "kind": "request",
+    "path": "/v1/demo/sessions",
+    "method": "post",
+    "value": {}
+  },
+  {
+    "name": "demo-recommend-request",
+    "kind": "request",
+    "path": "/v1/demo/recommendations",
+    "method": "post",
+    "value": {
+      "limit": 5,
+      "context": {
+        "surface": "home"
+      }
+    }
+  },
+  {
+    "name": "demo-impression",
+    "kind": "request",
+    "path": "/v1/demo/events",
+    "method": "post",
+    "value": {
+      "events": [
+        {
+          "event_id": "evt_imp_0001",
+          "event_type": "impression",
+          "item_id": "coast-sunset",
+          "occurred_at": "2026-10-01T12:00:00Z",
+          "impression_id": "imp_0001",
+          "request_id": "req_55555555555555555555555555555555"
+        }
+      ]
+    }
+  },
+  {
+    "name": "refresh-upload-targets",
+    "kind": "request",
+    "path": "/v1/projects/{project_id}/datasets/{dataset_id}/upload-targets",
+    "method": "post",
+    "value": {
+      "file_names": [
+        "items.csv",
+        "events.csv"
+      ]
+    }
+  },
+  {
+    "name": "upload-targets-refreshed",
+    "kind": "response",
+    "path": "/v1/projects/{project_id}/datasets/{dataset_id}/upload-targets",
+    "method": "post",
+    "status": 200,
+    "value": {
+      "dataset_id": "dts_22222222222222222222222222222222",
+      "uploads": [
+        {
+          "name": "items.csv",
+          "url": "https://uploads.example.invalid/items.csv?example=not-a-presigned-url",
+          "method": "PUT",
+          "headers": {
+            "Content-Type": "text/csv; charset=utf-8",
+            "x-amz-checksum-sha256": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo="
+          },
+          "expires_at": "2026-10-01T12:05:00Z"
+        },
+        {
+          "name": "events.csv",
+          "url": "https://uploads.example.invalid/events.csv?example=not-a-presigned-url",
+          "method": "PUT",
+          "headers": {
+            "Content-Type": "text/csv; charset=utf-8",
+            "x-amz-checksum-sha256": "u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7s="
+          },
+          "expires_at": "2026-10-01T12:05:00Z"
+        }
+      ],
+      "request_id": "req_55555555555555555555555555555555"
+    }
+  }
+]

@@ -1,0 +1,4618 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
+  "info": {
+    "title": "Loop recommendation platform",
+    "version": "1.0.0",
+    "description": "Phase 7.1 contract only. Routes are not implemented or deployed. Owner dashboard, developer integrations, and the bounded demo share one project-scoped recommendation engine. Unknown request object fields and undeclared query parameters are rejected. Application validation enforces cross-field, authorization, file-total and event relationships beyond JSON Schema. Published scores, identities and evaluation values are illustrative contract examples, not measured results."
+  },
+  "x-contract-version": "recommendation-v1",
+  "x-limits": {
+    "json_body_bytes": 262144,
+    "dataset_bytes": 52428800,
+    "candidate_count": 200,
+    "recommendation_count": 20,
+    "batch_count": 100,
+    "page_count": 100,
+    "idempotency_retention_seconds": 604800,
+    "event_deduplication_retention_seconds": 2592000,
+    "cursor_ttl_seconds": 900
+  },
+  "x-authorization-policy": {
+    "unauthenticated_status": 401,
+    "foreign_project_status": 404,
+    "insufficient_member_permission_status": 403,
+    "membership_required_for_dashboard_jwt": true,
+    "integration_scopes": [
+      "catalog:write",
+      "events:write",
+      "recommendations:read"
+    ]
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Health",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [],
+        "x-permissions": {
+          "actors": [
+            "public"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects": {
+      "post": {
+        "operationId": "create_project",
+        "summary": "Create project",
+        "description": "Any verified dashboard principal may create a project and becomes its owner. Existing project roles do not restrict creation of a different project. Contract only; endpoint not implemented in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreateRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "list_projects",
+        "summary": "List projects",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}": {
+      "get": {
+        "operationId": "get_project",
+        "summary": "Get project",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/datasets": {
+      "post": {
+        "operationId": "create_dataset",
+        "summary": "Create dataset",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetCreateRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "list_datasets",
+        "summary": "List datasets",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/datasets/{dataset_id}": {
+      "get": {
+        "operationId": "get_dataset",
+        "summary": "Get dataset",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/dataset_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/datasets/{dataset_id}/finalize": {
+      "post": {
+        "operationId": "finalize_dataset",
+        "summary": "Finalize dataset",
+        "description": "Verify each allocated object identity, actual bytes and full-file SHA-256 before validation is queued. Reject missing/unexpected objects, file-total above 50 MiB and any project mismatch. Upload transfer completion alone does not mean ready.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/dataset_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous execution.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/training-jobs": {
+      "post": {
+        "operationId": "start_training",
+        "summary": "Start training",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous execution.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingCreateRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "list_training_jobs",
+        "summary": "List training jobs",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingJobList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/training-jobs/{job_id}": {
+      "get": {
+        "operationId": "get_training_job",
+        "summary": "Get training job",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/job_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingJobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/training-jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_training",
+        "summary": "Cancel training",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/job_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous execution.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancellationAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/models": {
+      "get": {
+        "operationId": "list_models",
+        "summary": "List models",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/models/{model_version}": {
+      "get": {
+        "operationId": "get_model",
+        "summary": "Get model",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/model_version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/deployments": {
+      "get": {
+        "operationId": "get_active_deployment",
+        "summary": "Get active deployment",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      },
+      "post": {
+        "operationId": "promote_model",
+        "summary": "Promote model",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous execution.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/deployments/{deployment_id}": {
+      "get": {
+        "operationId": "get_deployment",
+        "summary": "Get deployment",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/deployment_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/deployments/rollback": {
+      "post": {
+        "operationId": "rollback_model",
+        "summary": "Rollback model",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous execution.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/api-keys": {
+      "post": {
+        "operationId": "issue_key",
+        "summary": "Issue key",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyIssued"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyCreateRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "list_keys",
+        "summary": "List keys",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/api-keys/{key_id}/revoke": {
+      "post": {
+        "operationId": "revoke_key",
+        "summary": "Revoke key",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/key_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/items": {
+      "post": {
+        "operationId": "upsert_items",
+        "summary": "Upsert items",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          },
+          {
+            "IntegrationKey": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "integration"
+          ],
+          "integration_scopes": [
+            "catalog:write"
+          ]
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemBatchRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "list_items",
+        "summary": "List items",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/events": {
+      "post": {
+        "operationId": "accept_events",
+        "summary": "Accept events",
+        "description": "Event IDs deduplicate for at least 30 days per project; retained immutable datasets remain deduplicated beyond that period. Client retries preserve IDs. Late events are durably retained and flagged. No exactly-once network-delivery guarantee.",
+        "security": [
+          {
+            "DashboardJWT": []
+          },
+          {
+            "IntegrationKey": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "integration"
+          ],
+          "integration_scopes": [
+            "events:write"
+          ]
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventBatchRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/recommendations": {
+      "post": {
+        "operationId": "recommend",
+        "summary": "Recommend",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DashboardJWT": []
+          },
+          {
+            "IntegrationKey": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner",
+            "viewer",
+            "integration"
+          ],
+          "integration_scopes": [
+            "recommendations:read"
+          ]
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/demo/sessions": {
+      "post": {
+        "operationId": "create_demo_session",
+        "summary": "Create demo session",
+        "description": "Create a bounded fixed-project demo session. Server assigns its user and project. Rate-limited and controlled by the session-disable switch. No dataset or training permissions.",
+        "security": [],
+        "x-permissions": {
+          "actors": [
+            "public"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/demo/recommendations": {
+      "post": {
+        "operationId": "demo_recommend",
+        "summary": "Demo recommend",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DemoSession": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "demo"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoRecommendationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/demo/events": {
+      "post": {
+        "operationId": "accept_demo_events",
+        "summary": "Accept demo events",
+        "description": "Contract for a future implementation; no endpoint exists in checkpoint 7.1.",
+        "security": [
+          {
+            "DemoSession": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "demo"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoEventBatchRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/datasets/{dataset_id}/upload-targets": {
+      "post": {
+        "operationId": "refresh_upload_targets",
+        "summary": "Refresh dataset upload targets",
+        "description": "Issue fresh five-minute upload targets for a subset of the dataset's originally declared filenames, only while it remains unfinalized/uploading. Expected byte lengths, full-file SHA-256 digests, project and object identities cannot change. Finalized/validating/ready/rejected datasets return 409; undeclared filenames return 400. Replaying an idempotency key returns its original target URLs even after they expire; submit a new key to refresh expired targets. Never use this route to mutate an immutable dataset.",
+        "security": [
+          {
+            "DashboardJWT": []
+          }
+        ],
+        "x-permissions": {
+          "actors": [
+            "owner"
+          ],
+          "integration_scopes": []
+        },
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/dataset_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fresh scoped upload targets; no validation job is started.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadTargetsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "default": {
+            "$ref": "#/components/responses/default"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadTargetsRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ExternalId": {
+        "$ref": "schemas/data.schema.json#/$defs/ExternalId"
+      },
+      "Item": {
+        "$ref": "schemas/data.schema.json#/$defs/Item"
+      },
+      "EventInput": {
+        "$ref": "schemas/data.schema.json#/$defs/EventInput"
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "unauthenticated",
+              "permission_denied",
+              "not_found",
+              "conflict",
+              "payload_too_large",
+              "quota_exceeded",
+              "unavailable",
+              "internal_error"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "code": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                "row": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "field",
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id",
+          "details"
+        ],
+        "additionalProperties": false
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^prj_"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "viewer"
+            ]
+          },
+          "created_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          }
+        },
+        "required": [
+          "project_id",
+          "name",
+          "role",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "ProjectCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "ProjectResponse": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "project",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "ProjectList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Project"
+            },
+            "maxItems": 100
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "UploadFile": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "items.csv",
+              "events.csv",
+              "users.csv"
+            ]
+          },
+          "byte_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 52428800
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "name",
+          "byte_length",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "DatasetCreateRequest": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "recommendation-v1"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadFile"
+            },
+            "minItems": 2,
+            "maxItems": 3,
+            "uniqueItems": true,
+            "allOf": [
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "items.csv"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": true
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "events.csv"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": true
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "users.csv"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": true
+                },
+                "minContains": 0,
+                "maxContains": 1
+              }
+            ]
+          },
+          "extraction_watermark": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          },
+          "split_cutoffs": {
+            "$ref": "schemas/data.schema.json#/$defs/SplitCutoffs"
+          },
+          "availability_mode": {
+            "type": "string",
+            "enum": [
+              "recorded_arrival",
+              "event_time_only"
+            ]
+          },
+          "provenance": {
+            "$ref": "schemas/data.schema.json#/$defs/Provenance"
+          }
+        },
+        "required": [
+          "schema_version",
+          "files",
+          "extraction_watermark",
+          "split_cutoffs",
+          "availability_mode",
+          "provenance"
+        ],
+        "additionalProperties": false,
+        "description": "Files total at most 50 MiB. Cutoffs must be strictly increasing and earlier than the extraction watermark. The server assigns project/dataset identities. recommendation-v1 fixes label semantics; no arbitrary objective or executable code is accepted."
+      },
+      "UploadTarget": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "items.csv",
+              "events.csv",
+              "users.csv"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://"
+          },
+          "method": {
+            "const": "PUT"
+          },
+          "headers": {
+            "type": "object",
+            "properties": {
+              "Content-Type": {
+                "const": "text/csv; charset=utf-8"
+              },
+              "x-amz-checksum-sha256": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9+/]{43}=$(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "Content-Type",
+              "x-amz-checksum-sha256"
+            ],
+            "additionalProperties": false
+          },
+          "expires_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "method",
+          "headers",
+          "expires_at"
+        ],
+        "additionalProperties": false,
+        "description": "Server-selected object and exact signed headers, valid for at most five minutes. Header checksum is the base64 encoding of the declared full-file SHA-256; it is not an S3 ETag. Never persist or publish presigned URLs."
+      },
+      "Dataset": {
+        "type": "object",
+        "properties": {
+          "dataset_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^dts_"
+              }
+            ]
+          },
+          "schema_version": {
+            "const": "recommendation-v1"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "uploaded",
+              "validating",
+              "ready",
+              "rejected"
+            ]
+          },
+          "created_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          },
+          "validation_report": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataset_id",
+          "schema_version",
+          "status",
+          "created_at",
+          "validation_report"
+        ],
+        "additionalProperties": false
+      },
+      "ValidationReport": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "accepted_rows": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "duplicate_rows": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "late_events": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string",
+                  "enum": [
+                    "items.csv",
+                    "events.csv",
+                    "users.csv"
+                  ]
+                },
+                "row": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "field": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "code": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "file",
+                "row",
+                "field",
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 20
+          },
+          "availability_mode": {
+            "type": "string",
+            "enum": [
+              "recorded_arrival",
+              "event_time_only"
+            ]
+          },
+          "provenance": {
+            "$ref": "schemas/data.schema.json#/$defs/Provenance"
+          },
+          "label_policy_version": {
+            "const": "click-v1"
+          }
+        },
+        "required": [
+          "valid",
+          "accepted_rows",
+          "duplicate_rows",
+          "late_events",
+          "errors",
+          "availability_mode",
+          "provenance",
+          "label_policy_version"
+        ],
+        "additionalProperties": false
+      },
+      "DatasetCreated": {
+        "type": "object",
+        "properties": {
+          "dataset": {
+            "$ref": "#/components/schemas/Dataset"
+          },
+          "uploads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadTarget"
+            },
+            "minItems": 2,
+            "maxItems": 3
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataset",
+          "uploads",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "DatasetResponse": {
+        "type": "object",
+        "properties": {
+          "dataset": {
+            "$ref": "#/components/schemas/Dataset"
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataset",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "DatasetList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Dataset"
+            },
+            "maxItems": 100
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "EmptyRequest": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "AsyncAccepted": {
+        "type": "object",
+        "properties": {
+          "resource_id": {
+            "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "validating",
+              "cancel_requested",
+              "deploying"
+            ]
+          },
+          "status_url": {
+            "type": "string",
+            "pattern": "^/v1/",
+            "maxLength": 512
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "resource_id",
+          "status",
+          "status_url",
+          "request_id"
+        ],
+        "additionalProperties": false,
+        "description": "A durable resource identity exists before asynchronous work begins. Poll status_url; a 202 response is not completion."
+      },
+      "TrainingCreateRequest": {
+        "type": "object",
+        "properties": {
+          "dataset_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^dts_"
+              }
+            ]
+          },
+          "model_family": {
+            "const": "deepfm"
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "epochs": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 5
+              },
+              "seed": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              }
+            },
+            "required": [
+              "epochs",
+              "seed"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "dataset_id",
+          "model_family",
+          "settings"
+        ],
+        "additionalProperties": false
+      },
+      "TrainingJob": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^job_"
+              }
+            ]
+          },
+          "dataset_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^dts_"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "running",
+              "succeeded",
+              "failed",
+              "cancel_requested",
+              "cancelled"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "validation",
+              "features",
+              "training",
+              "evaluation",
+              "registration",
+              "complete"
+            ]
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "created_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          },
+          "updated_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          },
+          "failure_code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "job_id",
+          "dataset_id",
+          "status",
+          "stage",
+          "attempt",
+          "created_at",
+          "updated_at",
+          "failure_code"
+        ],
+        "additionalProperties": false
+      },
+      "TrainingJobResponse": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/TrainingJob"
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "job",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "TrainingJobList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrainingJob"
+            },
+            "maxItems": 100
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "Metric": {
+        "type": "object",
+        "properties": {
+          "auc": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "log_loss": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "positive_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "negative_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "auc",
+          "log_loss",
+          "positive_count",
+          "negative_count"
+        ],
+        "additionalProperties": false
+      },
+      "Model": {
+        "type": "object",
+        "properties": {
+          "model_version": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^mdl_"
+              }
+            ]
+          },
+          "dataset_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^dts_"
+              }
+            ]
+          },
+          "job_id": {
+            "oneOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^job_"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "registered",
+              "eligible",
+              "ineligible",
+              "retired"
+            ]
+          },
+          "provenance": {
+            "$ref": "schemas/data.schema.json#/$defs/Provenance"
+          },
+          "execution_origin": {
+            "type": "string",
+            "enum": [
+              "local",
+              "aws"
+            ]
+          },
+          "feature_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "bundle_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+          },
+          "validation": {
+            "type": "object",
+            "properties": {
+              "baseline": {
+                "$ref": "#/components/schemas/Metric"
+              },
+              "deepfm": {
+                "$ref": "#/components/schemas/Metric"
+              }
+            },
+            "required": [
+              "baseline",
+              "deepfm"
+            ],
+            "additionalProperties": false
+          },
+          "created_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          }
+        },
+        "required": [
+          "model_version",
+          "dataset_id",
+          "job_id",
+          "status",
+          "provenance",
+          "execution_origin",
+          "feature_version",
+          "bundle_sha256",
+          "validation",
+          "created_at"
+        ],
+        "additionalProperties": false,
+        "description": "Registration never implicitly deploys. Test metrics are not used for selection or promotion. A local seed model has job_id null and explicit local provenance."
+      },
+      "ModelResponse": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "$ref": "#/components/schemas/Model"
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "model",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "ModelList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            },
+            "maxItems": 100
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "DeploymentRequest": {
+        "type": "object",
+        "properties": {
+          "model_version": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^mdl_"
+              }
+            ]
+          },
+          "expected_generation": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "model_version",
+          "expected_generation"
+        ],
+        "additionalProperties": false,
+        "description": "Compare-and-swap against the active generation. Exact-version validation/probe must pass before activation. Rollback targets an eligible previously served version."
+      },
+      "Deployment": {
+        "type": "object",
+        "properties": {
+          "deployment_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^dep_"
+              }
+            ]
+          },
+          "model_version": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^mdl_"
+              }
+            ]
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "deploying",
+              "active",
+              "failed",
+              "superseded"
+            ]
+          },
+          "previous_model_version": {
+            "oneOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^mdl_"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          }
+        },
+        "required": [
+          "deployment_id",
+          "model_version",
+          "generation",
+          "status",
+          "previous_model_version",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "DeploymentResponse": {
+        "type": "object",
+        "properties": {
+          "deployment": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Deployment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "deployment",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "KeyCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "catalog:write",
+                "events:write",
+                "recommendations:read"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+          },
+          "expires_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          }
+        },
+        "required": [
+          "name",
+          "scopes",
+          "expires_at"
+        ],
+        "additionalProperties": false,
+        "description": "Expiry must be in the future and at most 30 days after issuance. Key scopes never allow dataset uploads, training, or deployment."
+      },
+      "KeySummary": {
+        "type": "object",
+        "properties": {
+          "key_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^key_"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "catalog:write",
+                "events:write",
+                "recommendations:read"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+          },
+          "masked_key": {
+            "type": "string",
+            "pattern": "^.{0,12}\\*{4}.{4}$(?![\\s\\S])"
+          },
+          "expires_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          },
+          "revoked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key_id",
+          "name",
+          "scopes",
+          "masked_key",
+          "expires_at",
+          "revoked"
+        ],
+        "additionalProperties": false
+      },
+      "KeyIssued": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/KeySummary"
+          },
+          "secret": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 32,
+            "maxLength": 160
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "secret",
+          "request_id"
+        ],
+        "additionalProperties": false,
+        "description": "Full secret is returned once; all examples contain an unusable placeholder. Idempotent replay returns key summary with secret null, so plaintext need not be retained."
+      },
+      "KeyList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KeySummary"
+            },
+            "maxItems": 100
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "KeyResponse": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/KeySummary"
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "ItemBatchRequest": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false,
+        "description": "Atomic bounded batch. Conflicting duplicate item IDs fail; metadata changes create versioned snapshots rather than rewriting historical training context."
+      },
+      "ItemList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
+            "maxItems": 100
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "BatchAccepted": {
+        "type": "object",
+        "properties": {
+          "acceptance_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^acc_"
+              }
+            ]
+          },
+          "accepted": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "duplicates": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "late": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "acceptance_id",
+          "accepted",
+          "duplicates",
+          "late",
+          "request_id"
+        ],
+        "additionalProperties": false,
+        "description": "Durable acceptance, not feature publication. Each response count is a nonnegative integer and accepted + duplicates equals the submitted batch length. late is a subset of accepted."
+      },
+      "EventBatchRequest": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventInput"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "additionalProperties": false,
+        "description": "Atomic bounded batch. The server assigns received_at. Click/watch must reference an existing matching project/user/item impression, including an earlier impression in this batch. Identical IDs deduplicate; conflicting IDs fail."
+      },
+      "RecommendationContext": {
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string",
+            "enum": [
+              "home"
+            ]
+          }
+        },
+        "required": [
+          "surface"
+        ],
+        "additionalProperties": false
+      },
+      "RecommendationRequest": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "$ref": "schemas/data.schema.json#/$defs/ExternalId"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 10
+          },
+          "context": {
+            "$ref": "#/components/schemas/RecommendationContext"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "additionalProperties": false
+      },
+      "RankedItem": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "$ref": "schemas/data.schema.json#/$defs/ExternalId"
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "impression_id": {
+            "$ref": "schemas/data.schema.json#/$defs/ExternalId"
+          },
+          "score": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "item_id",
+          "rank",
+          "impression_id",
+          "score"
+        ],
+        "additionalProperties": false,
+        "description": "An allocated impression_id identifies a potential exposure. It becomes an impression only after the visibility condition is met and the impression event is accepted. Baselines have score null."
+      },
+      "RecommendationResponse": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "deepfm"
+            ]
+          },
+          "model_version": {
+            "oneOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^mdl_"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deployment_generation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "feature_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "feature_snapshot_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^snp_"
+              }
+            ]
+          },
+          "context_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          },
+          "fallback_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "no_active_model",
+              "insufficient_data",
+              "unknown_user",
+              "model_loading",
+              "model_unavailable"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RankedItem"
+            },
+            "maxItems": 20
+          },
+          "baseline_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "request_id",
+          "strategy",
+          "model_version",
+          "deployment_generation",
+          "feature_version",
+          "feature_snapshot_id",
+          "context_at",
+          "fallback_reason",
+          "items",
+          "baseline_version"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "strategy": {
+                  "const": "baseline"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "model_version": {
+                  "type": "null"
+                },
+                "fallback_reason": {
+                  "type": "string"
+                },
+                "items": {
+                  "items": {
+                    "properties": {
+                      "score": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                },
+                "baseline_version": {
+                  "type": "string"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "model_version": {
+                  "allOf": [
+                    {
+                      "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^mdl_"
+                    }
+                  ]
+                },
+                "fallback_reason": {
+                  "type": "null"
+                },
+                "items": {
+                  "items": {
+                    "properties": {
+                      "score": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                },
+                "baseline_version": {
+                  "type": "null"
+                },
+                "deployment_generation": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        ],
+        "description": "Pin one deployment generation and immutable feature snapshot for the complete candidate batch. Maximum 200 candidates and 20 returned items, deterministic item-ID tie-breaking. A response never itself logs an impression. Baseline responses identify the exact baseline_version and use model_version null. Learned responses use baseline_version null and a positive deployment generation."
+      },
+      "DemoSession": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^ses_"
+              }
+            ]
+          },
+          "session_token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 160
+          },
+          "expires_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "session_id",
+          "session_token",
+          "expires_at",
+          "request_id"
+        ],
+        "additionalProperties": false,
+        "description": "Opaque token for a fixed demo project and server-selected pseudonymous user. Valid at most four hours and scoped to demo recommendation/event routes only. Reset creates a new session; it never deletes project data."
+      },
+      "DemoRecommendationRequest": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 10
+          },
+          "context": {
+            "$ref": "#/components/schemas/RecommendationContext"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "DemoEventInput": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "$ref": "schemas/data.schema.json#/$defs/ExternalId"
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "impression",
+              "click",
+              "watch"
+            ]
+          },
+          "item_id": {
+            "$ref": "schemas/data.schema.json#/$defs/ExternalId"
+          },
+          "occurred_at": {
+            "$ref": "schemas/data.schema.json#/$defs/Timestamp"
+          },
+          "impression_id": {
+            "$ref": "schemas/data.schema.json#/$defs/ExternalId"
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          },
+          "watch_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600000
+          }
+        },
+        "required": [
+          "event_id",
+          "event_type",
+          "item_id",
+          "occurred_at",
+          "impression_id"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "event_type": {
+                  "const": "watch"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "watch_ms"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "watch_ms"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "User, session, and project are derived from the demo token. Requests/impressions must belong to that session; the browser cannot report another session's exposure."
+      },
+      "DemoEventBatchRequest": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DemoEventInput"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "additionalProperties": false
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "const": "ok"
+          },
+          "api_version": {
+            "const": "v1"
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "api_version",
+          "request_id"
+        ],
+        "additionalProperties": false,
+        "description": "Transport availability only; model readiness is project/version-specific."
+      },
+      "DatasetAccepted": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AsyncAccepted"
+          },
+          {
+            "properties": {
+              "resource_id": {
+                "allOf": [
+                  {
+                    "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^dts_"
+                  }
+                ]
+              },
+              "status": {
+                "enum": [
+                  "validating"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "TrainingAccepted": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AsyncAccepted"
+          },
+          {
+            "properties": {
+              "resource_id": {
+                "allOf": [
+                  {
+                    "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^job_"
+                  }
+                ]
+              },
+              "status": {
+                "enum": [
+                  "accepted"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "CancellationAccepted": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AsyncAccepted"
+          },
+          {
+            "properties": {
+              "resource_id": {
+                "allOf": [
+                  {
+                    "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^job_"
+                  }
+                ]
+              },
+              "status": {
+                "enum": [
+                  "cancel_requested"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "DeploymentAccepted": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AsyncAccepted"
+          },
+          {
+            "properties": {
+              "resource_id": {
+                "allOf": [
+                  {
+                    "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^dep_"
+                  }
+                ]
+              },
+              "status": {
+                "enum": [
+                  "deploying"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "UploadTargetsRequest": {
+        "type": "object",
+        "properties": {
+          "file_names": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "items.csv",
+                "events.csv",
+                "users.csv"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "file_names"
+        ],
+        "additionalProperties": false,
+        "description": "A subset of files declared at dataset creation. Cannot add files or change expected byte lengths/checksums."
+      },
+      "UploadTargetsResponse": {
+        "type": "object",
+        "properties": {
+          "dataset_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^dts_"
+              }
+            ]
+          },
+          "uploads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadTarget"
+            },
+            "minItems": 1,
+            "maxItems": 3
+          },
+          "request_id": {
+            "allOf": [
+              {
+                "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+              },
+              {
+                "type": "string",
+                "pattern": "^req_"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataset_id",
+          "uploads",
+          "request_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$(?![\\s\\S])"
+        },
+        "description": "Retain for seven days per principal/project. Canonical request digest includes normalized path/body. Same key/payload replays the original resource and response status; changed payload returns 409. Secret issuance replays a masked summary with secret null."
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "description": "Opaque cursor bound to route, authorized project, filters and snapshot. Expires after 15 minutes. Malformed, expired, or mismatched cursor returns 400."
+      },
+      "project_id": {
+        "name": "project_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "allOf": [
+            {
+              "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+            },
+            {
+              "type": "string",
+              "pattern": "^prj_"
+            }
+          ]
+        }
+      },
+      "dataset_id": {
+        "name": "dataset_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "allOf": [
+            {
+              "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+            },
+            {
+              "type": "string",
+              "pattern": "^dts_"
+            }
+          ]
+        }
+      },
+      "job_id": {
+        "name": "job_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "allOf": [
+            {
+              "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+            },
+            {
+              "type": "string",
+              "pattern": "^job_"
+            }
+          ]
+        }
+      },
+      "model_version": {
+        "name": "model_version",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "allOf": [
+            {
+              "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+            },
+            {
+              "type": "string",
+              "pattern": "^mdl_"
+            }
+          ]
+        }
+      },
+      "deployment_id": {
+        "name": "deployment_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "allOf": [
+            {
+              "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+            },
+            {
+              "type": "string",
+              "pattern": "^dep_"
+            }
+          ]
+        }
+      },
+      "key_id": {
+        "name": "key_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "allOf": [
+            {
+              "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+            },
+            {
+              "type": "string",
+              "pattern": "^key_"
+            }
+          ]
+        }
+      }
+    },
+    "responses": {
+      "400": {
+        "description": "Malformed input, unknown field/query parameter, invalid cursor or invalid relationship.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "401": {
+        "description": "Missing or invalid credential.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "403": {
+        "description": "Authenticated project member lacks the required permission or scope.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "404": {
+        "description": "Missing resource, or a verified principal outside its project. Do not disclose which.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "409": {
+        "description": "Conflicting idempotency payload, event identity, or resource/deployment generation.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "413": {
+        "description": "JSON body exceeds 256 KiB, or dataset exceeds the upload limits.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "429": {
+        "description": "Bounded request/job quota exceeded. Respect Retry-After.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            },
+            "description": "Seconds before retry."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "503": {
+        "description": "Dependency/model unavailable within the request deadline.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "default": {
+        "description": "Unexpected failure; safe message and request ID only.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "headers": {
+      "RequestId": {
+        "schema": {
+          "allOf": [
+            {
+              "$ref": "schemas/data.schema.json#/$defs/ResourceId"
+            },
+            {
+              "type": "string",
+              "pattern": "^req_"
+            }
+          ]
+        },
+        "description": "Safe correlation identity also returned in the body."
+      }
+    },
+    "securitySchemes": {
+      "DashboardJWT": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Verified Cognito token; issuer, client, token-use, expiry and project membership required. Owner/viewer role is stored server-side."
+      },
+      "IntegrationKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "High-entropy project-bound scoped developer key. Digest stored server-side; no dataset/training/deployment permission."
+      },
+      "DemoSession": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Demo-Session",
+        "description": "Opaque session token bound server-side to one demo project/user. Never an integration key."
+      }
+    }
+  }
+}
