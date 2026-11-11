@@ -95,7 +95,7 @@ Verify:
 
 **Exit:** Negative authorization tests cover every resource family before upload or job APIs are exposed.
 
-**Completion:** [7.3 record](completions/7.3.md), [identity and credential guide](identity-and-credentials.md), and [sanitized evidence](../evidence/phase-7/checkpoint-7.3.json). The local application implements project create/list/read and key issue/list/revoke, verifies signed tokens and current key state, and applies the OpenAPI permission policy to all 23 project-scoped operations. All 98 API tests pass under Node 22 after review fixes, including two real DynamoDB Local integration tests. Future data/ML operations and demo sessions remain gated. Cognito provisioning and AWS proof remain 7.10–7.11 work.
+**Completion:** [7.3 record](completions/7.3.md), [identity and credential guide](identity-and-credentials.md), and [sanitized evidence](../evidence/phase-7/checkpoint-7.3.json). The local application implements project create/list/read and key issue/list/revoke, verifies signed tokens and current key state, and applies the OpenAPI permission policy to all 23 project-scoped operations. All 99 API tests pass under Node 22 after review fixes, including two real DynamoDB Local integration tests. Future data/ML operations and demo sessions remain gated. Cognito provisioning and AWS proof remain 7.10–7.11 work.
 
 ## 7.4 — Implement datasets, events, and durable jobs
 
@@ -242,8 +242,9 @@ Build:
 2. Configure scoped IAM, GitHub OIDC trust limited to the deployment repository/environment/ref, and separate read/plan/apply/evidence/destroy capabilities. Avoid static AWS access keys in CI.
 3. Create local image/build/package workflows and a manual cloud delivery workflow; ordinary pushes run checks without applying infrastructure or training models.
 4. Add expiry, application quotas, workflow/job timeouts, reconciliation limits, no provisioned concurrency or idle Glue interactive sessions, and short log retention. Implement an independently invokable session stop procedure; an optional timed stop is defense in depth, not a billing guarantee.
-5. Write evidence export and resource inventory/teardown scripts. Verify state files, credentials, raw datasets, model weights, and unredacted logs remain ignored before generating them.
-6. Fill the regional price/usage worksheet with current rates, deployment overhead, anticipated requests, taxes, and a reserve. Verify the reported credit balance/expiry, Free-plan end date, and eligible-service coverage in the intended account, together with Glue/Lambda quotas and the required IAM operations. Estimate gross usage before applying credits; include any prior project usage and preserve the budget runbook's planning buffer below the available $100 maximum.
+5. Extend dependency-failure logs with the cause's AWS error name only when it is on an explicit allowlist of known service errors (for example `AccessDeniedException`, `ResourceNotFoundException`, throttling); log nothing for any other value. This distinguishes IAM, table and capacity failures during the session without logging messages or causes.
+6. Write evidence export and resource inventory/teardown scripts. Verify state files, credentials, raw datasets, model weights, and unredacted logs remain ignored before generating them.
+7. Fill the regional price/usage worksheet with current rates, deployment overhead, anticipated requests, taxes, and a reserve. Verify the reported credit balance/expiry, Free-plan end date, and eligible-service coverage in the intended account, together with Glue/Lambda quotas and the required IAM operations. Estimate gross usage before applying credits; include any prior project usage and preserve the budget runbook's planning buffer below the available $100 maximum.
 
 Verify:
 

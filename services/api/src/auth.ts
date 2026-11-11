@@ -94,7 +94,10 @@ export async function createDashboardVerifier(auth: AuthConfig): Promise<Dashboa
         if (token.length > 16384 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) {
           throw new AuthenticationError();
         }
-        const header = decodeProtectedHeader(token);
+        // jose reports an undecodable/non-object header as a plain TypeError.
+        // Scope this catch to header decoding so later TypeErrors remain 500s.
+        let header: ReturnType<typeof decodeProtectedHeader>;
+        try { header = decodeProtectedHeader(token); } catch { throw new AuthenticationError(); }
         if (header.alg !== 'RS256' || typeof header.kid !== 'string' || !header.kid || header.kid.length > 256) {
           throw new AuthenticationError();
         }

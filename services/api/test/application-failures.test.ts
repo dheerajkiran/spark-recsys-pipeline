@@ -84,6 +84,49 @@ test('invalid credentials and expected validation failures do not produce intern
   assert.deepEqual(logs, []);
 });
 
+test('malformed JWT headers return 401 without internal-error logs; later 500/503 paths are unchanged', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'loop-malformed-jwt-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const jwksPath = join(root, 'public-jwks.json');
+  const pair = await generateKeyPair('RS256');
+  await writeFile(jwksPath, JSON.stringify({ keys: [{ ...await exportJWK(pair.publicKey), kid: 'malformed', alg: 'RS256' }] }));
+  const localConfig: Config = { ...config, dataRoot: root, auth: { ...config.auth as Extract<NonNullable<Config['auth']>, { mode: 'local' }>, jwksPath } };
+  const part = (value: string) => Buffer.from(value).toString('base64url');
+  const valid = await new SignJWT({ username: 'tester', token_use: 'access', client_id: 'loop-local', scope: 'loop/api' })
+    .setProtectedHeader({ alg: 'RS256', kid: 'malformed' }).setIssuer('http://loop.local').setSubject('tester')
+    .setIssuedAt().setExpirationTime('1h').sign(pair.privateKey);
+  const bearer = (token: string) => ({ ...request, path: '/v1/projects', headers: { authorization: `Bearer ${token}` } });
+  // The real lazy verifier is used; only the store varies between phases.
+  let failure: Error | null = null;
+  const local = new LocalIdentityStore(root);
+  const store: IdentityStore = {
+    async get(key) { if (failure) throw failure; return local.get(key); },
+    async query(pk, prefix) { if (failure) throw failure; return local.query(pk, prefix); },
+    async transact(writes) { if (failure) throw failure; return local.transact(writes); },
+  };
+  const logs: ErrorLog[] = [];
+  const app = createApplication(localConfig, { store, logger: (entry) => logs.push(entry) });
+
+  for (const token of ['a.b.c', `${part('[1]')}.${part('{}')}.c2ln`]) {
+    const response = await app(bearer(token));
+    assert.equal(response.status, 401, token);
+    const body = JSON.parse(response.body) as { code: string };
+    assert.equal(body.code, 'unauthenticated');
+    assert.equal(validateError(body), true);
+  }
+  assert.equal(logs.length, 0);
+  assert.equal((await app(bearer(valid))).status, 200);
+  assert.equal(logs.length, 0);
+
+  failure = new TypeError('post-authentication bug');
+  checkFailure(await app(bearer(valid)), 500, logs);
+  assert.equal(logs[0]?.error_name, 'TypeError');
+  logs.length = 0;
+  failure = new DependencyUnavailable('Identity backend unavailable');
+  checkFailure(await app(bearer(valid)), 503, logs);
+  assert.equal(logs[0]?.error_name, 'DependencyUnavailable');
+});
+
 test('failed lazy verifier setup can recover on the next request without restarting the application', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'loop-verifier-recovery-'));
   t.after(() => rm(root, { recursive: true, force: true }));

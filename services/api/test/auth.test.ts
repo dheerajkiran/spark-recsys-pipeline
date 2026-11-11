@@ -101,6 +101,11 @@ test('JWT rejects bad signature, unknown kid, missing kid and algorithm confusio
   await assert.rejects(verifier.verify(symmetric), AuthenticationError);
   await assert.rejects(verifier.verify(`${signed.slice(0, signed.lastIndexOf('.') + 1)}`), AuthenticationError);
   await assert.rejects(verifier.verify('a'.repeat(16385)), AuthenticationError);
+  // Headers jose cannot decode (plain TypeError internally) are invalid credentials.
+  const part = (value: string) => Buffer.from(value).toString('base64url');
+  for (const header of ['a', part('[1]'), part('null'), part('not json'), part('"RS256"')]) {
+    await assert.rejects(verifier.verify(`${header}.${part('{}')}.c2ln`), AuthenticationError);
+  }
 });
 
 test('configured resource audience and every required scope are enforced', async () => {

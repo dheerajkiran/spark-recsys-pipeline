@@ -13,9 +13,9 @@
   },
   "scope": "Local implementation, signed synthetic identities, filesystem and actual DynamoDB Local transactions. No AWS account, Cognito deployment, customer data workflow, model inference, or cloud service proof.",
   "verification": {
-    "scope": "Review follow-up: changed API suite and Node 22 typecheck/lint/build rerun; unchanged Python/frontend checks retained under initial_verification.",
+    "scope": "Review follow-ups: changed API suite and Node 22 typecheck/lint/build rerun; unchanged Python/frontend checks retained under initial_verification.",
     "api": {
-      "passed": 98,
+      "passed": 99,
       "failed": 0,
       "skipped": 0,
       "real_dynamodb_local_tests": 2,
@@ -31,7 +31,8 @@
       "Unexpected bugs and response/schema corruption produce 500 and one correlated safe log.",
       "Typed store/network/JWKS dependency failures produce 503; invalid credentials remain 401.",
       "Logs exclude request headers/bodies and thrown messages/causes.",
-      "Failed lazy verifier initialization can recover without application restart."
+      "Failed lazy verifier initialization can recover without application restart.",
+      "Malformed JWT headers that jose cannot decode return 401 with no internal-error log; later 500/503 classification is unchanged (mutation-checked)."
     ],
     "jobs_carryovers": "queued versus accepted and original workflow error preservation remain 7.4 work."
   },
@@ -106,7 +107,7 @@
     "services/api/src/api-contract.ts": "1c87b2c4bbdcc9b915bda2ffc2bc99229475e1f54e103b3d622c2454f7c9d4b5",
     "services/api/src/api-error.ts": "9f75861727f26e6fdcfb714f18499b355a21fd676be7f6cb062ad5697bc3b65b",
     "services/api/src/application.ts": "fea098aaca6f4b2bb11df6943d8805f873dd3fbb560f569f62b87de05d4dfd22",
-    "services/api/src/auth.ts": "7d6844732e3f87067c8709e7f31ac2005cc6a0f60c197f9614981da5948b667d",
+    "services/api/src/auth.ts": "cfe53e1fc47fc7d6b0d6f70bfd86552f731da5ec4bca4685db72efaec1bce9ab",
     "services/api/src/config.ts": "8ceb0ecaf788968ce50e71246d70f74d1eac249b443fb725c91c5f973e4cdf94",
     "services/api/src/dynamo-identity-store.ts": "906f9bb66b65dd28f2082679406cc009a1b75ce65c4e164bbc863c8a0f6455d0",
     "services/api/src/failure.ts": "a02f1d1abeb83f2e6ee05ebcdae2bcb360f4fec20e94f78ea8d997926299b1d6",
@@ -120,8 +121,8 @@
     "services/api/src/local-workflow.ts": "09324bdd5a0fb40e04f7008444ff372c3b05c2a83476698295559bfc2e43717a",
     "services/api/src/main.ts": "9b4458722238b08f3c0278870c82add6d6ee0e2f4a492ec8811367faf7a5bad6",
     "services/api/src/pagination.ts": "2ca5ed78bef301b20536327cda75c9493fcfc08d1afde8c730f312887d30a818",
-    "services/api/test/application-failures.test.ts": "4dac3e245424a3b2418be20dafd0c7a1b24a7a8b916b1cd74a84382b83804f05",
-    "services/api/test/auth.test.ts": "337496bda5f18dfbe86e312cb70421a5fea0dd1a1089db423b49c0c36742062a",
+    "services/api/test/application-failures.test.ts": "34e8efbb0dd8cb948d7ae4f1f4acecbe1489c363179060da1d7353e8e45a240b",
+    "services/api/test/auth.test.ts": "7e37361acaf87ccc6967cc4b33789d39f06135a34299be87cede0a49fab3be76",
     "services/api/test/authorization.test.ts": "5de4619b934f2cf5b5b077eed0506907be2ef6f3f869f8f966271f0baebe8a04",
     "services/api/test/dynamo-identity-store.test.ts": "d5525404e576a7b023bbe58d9592ff688227b86e4eaba03bac11e2b2024ca8ea",
     "services/api/test/failure.test.ts": "cf226ed4adcd1e29eae56e27456ba9088a2d5b5fe770f395b140e001ecb52cad",
@@ -238,6 +239,21 @@
       "services/api/test/identity-store.test.ts": "632cc3a0331f4b558aa3a18e1a44634b733ce571af55517b2cf1a012acfe99a8"
     }
   },
-  "verification_parent_commit": "4e6a94e4a0e81f48592cd51c0890e98d4f5fee57",
-  "verification_source_state": "Review-fix working tree; source digests bind the verified API code and tests independently of later Git metadata."
+  "verification_parent_commit": "04927568cb219ff9acdfd97ba0735ead8567bca6",
+  "verification_source_state": "Review-fix working tree; source digests bind the verified API code and tests independently of later Git metadata.",
+  "review_fix_ci": {
+    "verified_date": "2026-11-11",
+    "verification_source": "GitHub Actions run metadata and API job log",
+    "run_id": 43109886023,
+    "url": "https://github.com/dheerajkiran/spark-recsys-pipeline/actions/runs/43109886023",
+    "branch": "phase7-identity",
+    "head_sha": "04927568cb219ff9acdfd97ba0735ead8567bca6",
+    "conclusion": "success",
+    "api_tests": {
+      "passed": 98,
+      "failed": 0,
+      "skipped": 0
+    },
+    "scope": "Bound to the first review-fix commit; the malformed-header fix after it requires its own CI run."
+  }
 }
