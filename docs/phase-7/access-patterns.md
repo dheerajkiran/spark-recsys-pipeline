@@ -1,6 +1,6 @@
 # Initial permissions and storage access patterns
 
-Checkpoint 7.1 design, November 10, 2026. These are enforcement targets for 7.2–7.7, not a deployed database or authorization implementation. Machine-readable per-operation permissions are in [OpenAPI](../../contracts/openapi.json); the contract tests require an explicit permission policy on every operation.
+Initial checkpoint 7.1 design, updated November 11, 2026. Checkpoint 7.3 implements the shared permission boundary, project/membership records, and credential lifecycle; data/ML/workflow records below remain their later checkpoints' targets. Machine-readable per-operation permissions are in [OpenAPI](../../contracts/openapi.json); the contract tests require an explicit permission policy on every operation. The [identity guide](identity-and-credentials.md) records the implemented physical identity layout and local limitations. No deployed database is claimed.
 
 ## Permission matrix
 
@@ -20,7 +20,7 @@ An unauthenticated caller fails with `401`. A verified principal outside the req
 
 ## Query and transaction targets
 
-Key forms below describe logical records; checkpoint 7.3 will choose the physical table/index layout. An authorized project context is mandatory even when a globally formatted child ID looks unique. Never scan all projects to satisfy a customer request.
+Key forms below describe logical records; checkpoint 7.3's physical identity layout uses base-table principal/project partitions and transactional membership-index records, with no GSI or scan. An authorized project context is mandatory even when a globally formatted child ID looks unique. Never scan all projects to satisfy a customer request.
 
 | Access pattern | Keys or index | Required condition / publication rule |
 |---|---|---|
@@ -44,4 +44,4 @@ All list routes use opaque bounded cursors tied to principal/project, route, and
 
 Idempotency identity includes authenticated actor, authorized project, operation, and key; canonicalized payload fields are covered. A payload mismatch gives `409`. Key issuance replay returns the existing summary and `secret: null`; it cannot reveal a secret twice. Upload refresh with a new key may replace expired targets only for the same pending dataset and declared file identities. Transaction retries cannot create a second logical job. Event requests with the same ID/payload deduplicate, while the same ID with changed content conflicts. Expiration is a documented retry limit, not an assertion of exactly-once network delivery.
 
-Authorization, transactional outbox, conditional publication, cursor signing, key hashing/revocation, snapshot storage, and negative cross-project HTTP tests remain implementation work. The two fixtures provide colliding external IDs for those future tests; validating the fixture files alone does not prove request isolation.
+Authorization, identity transactions, encrypted cursors, key hashing/revocation, and negative request tests across all project resource families are implemented in checkpoint 7.3. Transactional job/event outboxes, dataset/model publication, and feature snapshot storage remain implementation work. Future endpoints currently return `503` only after their permission and input checks; these tests do not claim that customer datasets, catalog items, jobs, or models have already been implemented.

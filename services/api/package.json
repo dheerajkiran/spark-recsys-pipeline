@@ -8,10 +8,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test test/*.test.ts",
     "dev": "tsx src/main.ts",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "local:admin": "tsx src/local-admin.ts"
   },
   "dependencies": {
-    "ajv": "8.17.1",
-    "ajv-formats": "3.0.1"
+    "@aws-sdk/client-dynamodb": "3.1167.0",
+    "@aws-sdk/lib-dynamodb": "3.1167.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "jose": "6.2.17"
   }
 }

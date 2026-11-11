@@ -1,6 +1,6 @@
 # Phase 7 implementation checkpoints
 
-**Status:** Checkpoints 7.1 and 7.2 are complete locally, with [7.1 evidence](completions/7.1.md) and [7.2 evidence](completions/7.2.md). Checkpoints 7.3–7.12 remain planned. AWS work described below has not been performed.
+**Status:** Checkpoints 7.1–7.3 are complete locally, with [7.1 evidence](completions/7.1.md), [7.2 evidence](completions/7.2.md), and [7.3 evidence](completions/7.3.md). Checkpoints 7.4–7.12 remain planned. AWS work described below has not been performed.
 
 Read the [phase brief](README.md), [architecture](architecture.md), [data/ML contracts](data-and-ml-contracts.md), [frontend plan](frontend-and-demo.md), and [budget runbook](budget-and-recording.md) together. On November 10, 2026, the user made the reported **$100 AWS credit balance available to this project**, replacing the earlier small spending limit and asking to stay comfortably below that maximum. Keep the planning buffer in the budget runbook, one recording session, then teardown. The previously confirmed Free plan and proposed AWS Glue Spark path remain subject to account preflight. Checkpoints 7.1–7.10 are local work; infrastructure documents and plans do not authorize an unattended cloud deployment or account-plan upgrade.
 
@@ -14,7 +14,7 @@ The named folders and commands below are proposed deliverables. They are not com
 |---|---|---|---|
 | 7.1 | Product/data/API contracts and bounded demo fixture | Phase brief | Complete locally |
 | 7.2 | Local platform foundation and CI | 7.1 | Complete locally |
-| 7.3 | Identity, project isolation, and API credentials | 7.2 | Planned |
+| 7.3 | Identity, project isolation, and API credentials | 7.2 | Complete locally |
 | 7.4 | Upload validation, ingestion, and durable job records | 7.3 | Planned |
 | 7.5 | Canonical Spark feature build and S3 manifests | 7.4 | Planned |
 | 7.6 | Bounded training, evaluation, and model registry | 7.5 | Planned |
@@ -95,6 +95,8 @@ Verify:
 
 **Exit:** Negative authorization tests cover every resource family before upload or job APIs are exposed.
 
+**Completion:** [7.3 record](completions/7.3.md), [identity and credential guide](identity-and-credentials.md), and [sanitized evidence](../evidence/phase-7/checkpoint-7.3.json). The local application implements project create/list/read and key issue/list/revoke, verifies signed tokens and current key state, and applies the OpenAPI permission policy to all 23 project-scoped operations. All 99 API tests pass under Node 22 after review fixes, including two real DynamoDB Local integration tests. Future data/ML operations and demo sessions remain gated. Cognito provisioning and AWS proof remain 7.10–7.11 work.
+
 ## 7.4 — Implement datasets, events, and durable jobs
 
 **Outcome:** A customer can supply a bounded dataset and receive a real validation/job result.
@@ -106,12 +108,14 @@ Build:
 3. Implement item/event APIs with stable request and impression IDs. A returned recommendation is not automatically an exposure; a viewport/playback rule establishes an impression. Match click events to actual exposed items.
 4. Persist job state and a durable job-start outbox atomically using DynamoDB transactions. A stream consumer starts the workflow idempotently using a stable execution name; retries reuse the same job rather than starting new compute.
 5. Add explicit accepted/running/succeeded/failed/cancelled states, stored failure reasons, retry counters, lease/attempt handling, and a reconciliation path for a missed or duplicated stream delivery. Implement bounded quotas and polling intervals.
+6. Resolve the 7.2 runner's `queued` state against the API contract's initial `accepted` state through an explicit adapter or replacement, with serialization/transition tests. Preserve the original start/work failure if writing the failed state also fails; report the state-recording failure separately and reconcile it. These are open carryovers from the local foundation, not completed 7.3 behavior.
 
 Verify:
 
 - Incomplete/oversized/malformed uploads cannot advance into Spark or training.
 - Duplicate finalize/start/event requests, a consumer crash, and out-of-order callbacks do not create duplicate expensive work or double-count events.
 - Dashboard polling reads durable state, and a worker failure reaches a useful terminal state without revealing another project's paths.
+- The accepted-state contract and any internal queued state agree at the API boundary; a secondary persistence/transition failure cannot replace the original workflow error.
 
 **Artifacts:** Upload/event endpoints, validation report schema, state-transition tests, outbox/reconciler logic, and local workflow evidence.
 
@@ -238,8 +242,9 @@ Build:
 2. Configure scoped IAM, GitHub OIDC trust limited to the deployment repository/environment/ref, and separate read/plan/apply/evidence/destroy capabilities. Avoid static AWS access keys in CI.
 3. Create local image/build/package workflows and a manual cloud delivery workflow; ordinary pushes run checks without applying infrastructure or training models.
 4. Add expiry, application quotas, workflow/job timeouts, reconciliation limits, no provisioned concurrency or idle Glue interactive sessions, and short log retention. Implement an independently invokable session stop procedure; an optional timed stop is defense in depth, not a billing guarantee.
-5. Write evidence export and resource inventory/teardown scripts. Verify state files, credentials, raw datasets, model weights, and unredacted logs remain ignored before generating them.
-6. Fill the regional price/usage worksheet with current rates, deployment overhead, anticipated requests, taxes, and a reserve. Verify the reported credit balance/expiry, Free-plan end date, and eligible-service coverage in the intended account, together with Glue/Lambda quotas and the required IAM operations. Estimate gross usage before applying credits; include any prior project usage and preserve the budget runbook's planning buffer below the available $100 maximum.
+5. Extend dependency-failure logs with the cause's AWS error name only when it is on an explicit allowlist of known service errors (for example `AccessDeniedException`, `ResourceNotFoundException`, throttling); log nothing for any other value. This distinguishes IAM, table and capacity failures during the session without logging messages or causes.
+6. Write evidence export and resource inventory/teardown scripts. Verify state files, credentials, raw datasets, model weights, and unredacted logs remain ignored before generating them.
+7. Fill the regional price/usage worksheet with current rates, deployment overhead, anticipated requests, taxes, and a reserve. Verify the reported credit balance/expiry, Free-plan end date, and eligible-service coverage in the intended account, together with Glue/Lambda quotas and the required IAM operations. Estimate gross usage before applying credits; include any prior project usage and preserve the budget runbook's planning buffer below the available $100 maximum.
 
 Verify:
 

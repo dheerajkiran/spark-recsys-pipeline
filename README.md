@@ -4,7 +4,7 @@ A distributed data preprocessing pipeline that turns raw short-video interaction
 
 Raw logs land in **HDFS**, **Apache Spark** cleans them and builds features across a cluster of workers, and the result is written back as partitioned **Parquet**. A **PyTorch** CTR model then trains on that data.
 
-> **Status:** Phases 0–6 cover the implemented raw-to-gold pipeline, training, model verification, and engineering benchmarks. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). **[Phase 7: AWS recommendation platform](docs/phase-7/README.md)** is in progress: [checkpoint 7.1 contracts and synthetic fixtures](contracts/README.md) and the [checkpoint 7.2 local foundation](docs/phase-7/completions/7.2.md) are implemented. Identity, customer data flows, and cloud deployment remain planned. Build locally before one small recorded AWS deployment and teardown. Up to $100 in reported AWS credits is available; aim to spend comfortably below that maximum.
+> **Status:** Phases 0–6 cover the implemented raw-to-gold pipeline, training, model verification, and engineering benchmarks. The corrected randomized-target control passes; the original failed diagnostic remains documented (see Results). **[Phase 7: AWS recommendation platform](docs/phase-7/README.md)** is in progress: checkpoints 7.1–7.3 implement [contracts and synthetic fixtures](contracts/README.md), the [local foundation](docs/phase-7/completions/7.2.md), and [identity, project isolation, and scoped credentials](docs/phase-7/completions/7.3.md). Customer data flows and cloud deployment remain planned. Build locally before one small recorded AWS deployment and teardown. Up to $100 in reported AWS credits is available; aim to spend comfortably below that maximum.
 
 ---
 
@@ -676,7 +676,7 @@ The full 1K pipeline passes every quality check. Cleaning removed 0.86% of event
 | **4. Build dataset** | Joins, broadcast, salting, time split, gold layer | 1 day | `build_dataset.py` | Gold train/val/test written; split integrity check passes | Done |
 | **5. Training** | Parquet → PyTorch loader, LR baseline, DeepFM | 1 day | `training/` | DeepFM beats the LR baseline on validation AUC | Done |
 | **6. Benchmarks and polish** | Scaling, skew, pandas and format benchmarks; plots; Spark UI screenshots | 1 day | `benchmarks/`, final README | Results section filled in | Done |
-| **7. AWS recommendation platform** | Production-oriented backend/frontend, recommendation API, customer workflow, and recorded cloud proof | Checkpoint-based | [Contracts and fixtures](contracts/README.md); application/platform planned | All three journeys verified; evidence exported; cloud resources removed | In progress: 7.1 complete locally |
+| **7. AWS recommendation platform** | Production-oriented backend/frontend, recommendation API, customer workflow, and recorded cloud proof | Checkpoint-based | [Contracts and fixtures](contracts/README.md), local API and identity; customer/ML workflows planned | All three journeys verified; evidence exported; cloud resources removed | In progress: 7.1–7.3 complete locally |
 
 **Original estimate for phases 0–6: about 7 days.** Phase 7 is a separate, checkpoint-based implementation; no completion date is promised. Each checkpoint ends in a working, reviewable increment.
 
