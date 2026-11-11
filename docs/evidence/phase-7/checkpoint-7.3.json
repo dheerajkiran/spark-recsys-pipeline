@@ -1,0 +1,143 @@
+{
+  "checkpoint": "7.3",
+  "status": "complete locally",
+  "date": "2026-11-11",
+  "branch": "phase7-identity",
+  "base_commit": "2ed3d9a",
+  "changes_uncommitted": true,
+  "environment": {
+    "node": "22.22.2",
+    "host": "macOS ARM64",
+    "database": "DynamoDB Local in temporary loopback-only Docker container",
+    "dynamodb_image": "amazon/dynamodb-local@sha256:6ada631ec7aa5fc83446855eb17233e3dad184fec47477e8140c6c569cfe0c86",
+    "frontend_node": "25.8.2 (unchanged preview regression suite)"
+  },
+  "scope": "Local implementation, signed synthetic identities, filesystem and actual DynamoDB Local transactions. No AWS account, Cognito deployment, customer data workflow, model inference, or cloud service proof.",
+  "verification": {
+    "api": {
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0,
+      "real_dynamodb_local_tests": 2,
+      "project_scoped_operations_checked": 23
+    },
+    "contracts": {
+      "passed": 101,
+      "operations": 29,
+      "examples": 21,
+      "playable_fixture_items": 8
+    },
+    "training_serving": {
+      "passed": 143
+    },
+    "frontend": {
+      "passed": 94,
+      "syntax_check": "passed"
+    },
+    "total_tests_passed": 399,
+    "typescript_typecheck": "passed",
+    "typescript_build": "passed",
+    "eslint": "passed",
+    "runtime_npm_audit": {
+      "reported_vulnerabilities": 0,
+      "scope": "omit=dev"
+    },
+    "git_diff_check": "passed"
+  },
+  "live_http_walkthrough": {
+    "scope": "local HTTP with signed local tokens and filesystem identity store",
+    "node": "v22.22.2",
+    "checks": [
+      {
+        "name": "owner_a_creates_project",
+        "status": 201
+      },
+      {
+        "name": "project_idempotent_replay",
+        "status": 201
+      },
+      {
+        "name": "owner_b_creates_separate_project",
+        "status": 201
+      },
+      {
+        "name": "owner_b_cannot_read_owner_a_project",
+        "status": 404
+      },
+      {
+        "name": "viewer_reads_shared_project",
+        "status": 200
+      },
+      {
+        "name": "viewer_cannot_issue_keys",
+        "status": 403
+      },
+      {
+        "name": "owner_issues_scoped_key_once",
+        "status": 201
+      },
+      {
+        "name": "key_replay_hides_secret",
+        "status": 201
+      },
+      {
+        "name": "scoped_key_reaches_gated_recommendation",
+        "status": 503
+      },
+      {
+        "name": "key_cannot_train",
+        "status": 403
+      },
+      {
+        "name": "owner_revokes_key",
+        "status": 200
+      },
+      {
+        "name": "revoked_key_rejected_on_next_request",
+        "status": 401
+      }
+    ],
+    "secrets_retained_in_identity_store": false
+  },
+  "limitations": [
+    "Cognito keys fetched through a stubbed endpoint in tests; no deployed user pool or cloud authorization proof.",
+    "JWT provider-side revocation is not checked; valid access tokens can be accepted until expiry.",
+    "Public demo and future dataset/catalog/event/job/model/deployment/recommendation behavior stay disabled.",
+    "Lists materialize authorized partition results before returning bounded response pages.",
+    "Crashed local writers require explicit lock recovery; replay/audit cleanup remains unprovisioned.",
+    "No full Spark/benchmark rerun, CPU image rebuild, GitHub CI run, or AWS deployment in this checkpoint."
+  ],
+  "source_sha256": {
+    ".github/workflows/phase7-local.yml": "44c69b799353a9e0f3ccf14820301d93ea11af7b59e964b1e2fc7c1e4309258e",
+    "package-lock.json": "277e990b4ab94f6c0ac96e30d0416d6a729774aa733aa2a03c4254066544e9b4",
+    "services/api/package.json": "290b0701a72702af12cd3b995078ea7a5d2eda2a822faf89d463f0ebd230231a",
+    "services/api/src/api-contract.ts": "1c87b2c4bbdcc9b915bda2ffc2bc99229475e1f54e103b3d622c2454f7c9d4b5",
+    "services/api/src/api-error.ts": "9f75861727f26e6fdcfb714f18499b355a21fd676be7f6cb062ad5697bc3b65b",
+    "services/api/src/application.ts": "6cef0208e60fbf5f0c0ed3cbbf8c4ca20d583cd38fdb3fe1e39f1b734719d838",
+    "services/api/src/auth.ts": "3cb1ab0b67036d0edc056b38fcfc9c6485db9d652d0d6a20b74c009d3a526f24",
+    "services/api/src/config.ts": "7cf538c08572ed59bfa90a7b8f1916a6db90d02a0d574c346c91224a52881b6a",
+    "services/api/src/dynamo-identity-store.ts": "28358917ee58b511606716cd7fbb3fe4b85b5170ac34fce2b24cce213c1680e3",
+    "services/api/src/http.ts": "a6984c864e9121ac92e51f5aeac3d0369e87d930dfcfe730e26995e5b4a79cec",
+    "services/api/src/identity-runtime.ts": "70e0e23201e4b1974604c59e75ac3f4c4786c2baa55b33418af34e82788be269",
+    "services/api/src/identity-service.ts": "b8bbfcd5b59fda19b53e33dd451c71a601cce2564ee1bb131d431e32d1fa706a",
+    "services/api/src/identity-store.ts": "df3434a63d1fa871848620dcf4e7f00658ef42eb550e846d77cdff0a66131534",
+    "services/api/src/lambda.ts": "f23e549e2d28322b3089518c96e8f828c04c011e113686407db825f5c19494a4",
+    "services/api/src/local-admin.ts": "a427ab1b1d59671d6dfb51106da682deae68a163ab27242a21bf0fdfcf288282",
+    "services/api/src/local-storage.ts": "3e8f0da847e52e268e0a1078d5a670c733e53652207212b91a255ff1042fa9de",
+    "services/api/src/local-workflow.ts": "09324bdd5a0fb40e04f7008444ff372c3b05c2a83476698295559bfc2e43717a",
+    "services/api/src/main.ts": "9b4458722238b08f3c0278870c82add6d6ee0e2f4a492ec8811367faf7a5bad6",
+    "services/api/src/pagination.ts": "2ca5ed78bef301b20536327cda75c9493fcfc08d1afde8c730f312887d30a818",
+    "services/api/test/auth.test.ts": "afaf9048cc0a25c5aee0b590bfd57afc354a161d5e756913d486f1ef6324fda4",
+    "services/api/test/authorization.test.ts": "5de4619b934f2cf5b5b077eed0506907be2ef6f3f869f8f966271f0baebe8a04",
+    "services/api/test/dynamo-identity-store.test.ts": "250fbafec6224a726f8781ba83a69e07cf70efaedee18024bd7efe1b9e63e62a",
+    "services/api/test/foundation.test.ts": "69beef8367859600dc130625da0433a8a1f5924792bfa22f35022b5879fab399",
+    "services/api/test/http-boundary.test.ts": "b9d015196ef93ea1e8681cd19d7e83b80eb5c7650aca2a9cb0ce317a163ce9f5",
+    "services/api/test/identity-service.test.ts": "b8fabf3784c80bad72f0496c5edc8c72645a28d95af2ca2a9640bc827c39695d",
+    "services/api/test/identity-store.test.ts": "632cc3a0331f4b558aa3a18e1a44634b733ce571af55517b2cf1a012acfe99a8"
+  },
+  "local_cleanup": {
+    "api_server": "stopped",
+    "temporary_dynamodb_container": "removed",
+    "aws_resources_created": false
+  }
+}

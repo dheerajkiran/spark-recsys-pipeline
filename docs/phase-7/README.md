@@ -1,6 +1,6 @@
 # Phase 7 — AWS recommendation platform
 
-**Status:** In progress. Checkpoint 7.1 provides [executable contracts and synthetic fixtures](../../contracts/README.md), with [local completion evidence](completions/7.1.md). Checkpoint 7.2 provides the [local API, storage, workflow, and CPU image foundation](completions/7.2.md). Identity, customer data flows, infrastructure, cloud deployment, and platform ML results remain planned. Phases 0–6 remain the reproducible research foundation.
+**Status:** In progress. Checkpoint 7.1 provides [executable contracts and synthetic fixtures](../../contracts/README.md), with [local completion evidence](completions/7.1.md). Checkpoint 7.2 provides the [local API, storage, workflow, and CPU image foundation](completions/7.2.md). Checkpoint 7.3 provides [verified identity, project isolation, and scoped developer credentials](completions/7.3.md), with a [setup and lifecycle guide](identity-and-credentials.md). Customer data flows, infrastructure, cloud deployment, and platform ML results remain planned. Phases 0–6 remain the reproducible research foundation.
 
 **Planning date:** November 2, 2026; budget updated November 10, 2026. **Deployment constraint:** a recent-graduate portfolio project with **up to $100 in reported AWS credits available**, aiming to spend comfortably below that maximum, one short recording session, then teardown. This replaces the earlier small spending limit; the temporary deployment still replaces the earlier suggestion of always-running ECS/RDS.
 
@@ -84,7 +84,7 @@ Arbitrary uploaded Python/model executables, arbitrary CSV schemas, custom model
 | Workflow | Step Functions Standard plus durable job records | Shows actual asynchronous job state and handles failures without holding a browser request open |
 | Delivery | Terraform, local image builds, ECR, GitHub Actions with OIDC | Reviewable infrastructure and short-lived deployment credentials |
 
-These are planning decisions, not installed dependencies or completed migrations. Runtime versions, regional quotas, Lambda image size, cold starts, and exact rates must pass checkpoint gates before cloud use. The [architecture](architecture.md) explains the supported boundaries; the [budget runbook](budget-and-recording.md) gives the workload envelope. Larger CPU training can move to one-shot ECS tasks in a future budgeted deployment; it is not silently provisioned if a Lambda trial fails.
+The checkpoint ledger distinguishes implemented local components from planned migrations and AWS services. Runtime versions, regional quotas, Lambda image size, cold starts, and exact rates must pass checkpoint gates before cloud use. The [architecture](architecture.md) explains the supported boundaries; the [budget runbook](budget-and-recording.md) gives the workload envelope. Larger CPU training can move to one-shot ECS tasks in a future budgeted deployment; it is not silently provisioned if a Lambda trial fails.
 
 ```mermaid
 flowchart LR
@@ -177,8 +177,10 @@ Before the cloud checkpoint, identify the intended AWS account/region, verify th
 
 - [x] Document the product, architecture, contracts, checkpoint plan, and budget/recording approach.
 - [x] Complete checkpoint 7.1: contracts, fixture generator, decisions, and local verification.
-- [ ] Complete checkpoints 7.2–7.10 locally and prepare the cloud run.
+- [x] Complete checkpoint 7.2: local API, adapters, CPU image, and CI.
+- [x] Complete checkpoint 7.3: identity, project isolation, credentials, and local DynamoDB verification.
+- [ ] Complete checkpoints 7.4–7.10 locally and prepare the cloud run.
 - [ ] Complete the recorded AWS proof in checkpoint 7.11.
 - [ ] Complete teardown and portfolio evidence in checkpoint 7.12.
 
-The phase is **in progress**; only checkpoint 7.1 is complete locally. Contract verification does not establish that the platform application or AWS deployment exists.
+The phase is **in progress**; checkpoints 7.1–7.3 are complete locally. Local verification does not establish a deployed AWS environment or working customer upload/training/recommendation workflow.

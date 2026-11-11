@@ -23,7 +23,7 @@ test('config requires an explicit local data root and valid port', () => {
 test('Lambda adapter returns the same health and errors as domain application', async () => {
   const lambda = createLambdaHandler(app);
   for (const path of ['/health', '/v1/projects', '/missing']) {
-    const direct = app({ method: 'GET', path, query: '', headers: {}, body: Buffer.alloc(0) });
+    const direct = await app({ method: 'GET', path, query: '', headers: {}, body: Buffer.alloc(0) });
     const adapted = await lambda(event(path));
     assert.equal(adapted.statusCode, direct.status);
     const body = JSON.parse(adapted.body) as Record<string, unknown>;

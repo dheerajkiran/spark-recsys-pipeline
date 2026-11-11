@@ -42,3 +42,7 @@ services/api/dist/
 .terraform/
 *.tfvars
 platform-local/
+local-auth/
+**/identity/records*.json
+**/identity/records*.tmp
+**/identity/write.lock

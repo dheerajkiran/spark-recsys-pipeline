@@ -1,6 +1,6 @@
 # Phase 7 implementation checkpoints
 
-**Status:** Checkpoints 7.1 and 7.2 are complete locally, with [7.1 evidence](completions/7.1.md) and [7.2 evidence](completions/7.2.md). Checkpoints 7.3–7.12 remain planned. AWS work described below has not been performed.
+**Status:** Checkpoints 7.1–7.3 are complete locally, with [7.1 evidence](completions/7.1.md), [7.2 evidence](completions/7.2.md), and [7.3 evidence](completions/7.3.md). Checkpoints 7.4–7.12 remain planned. AWS work described below has not been performed.
 
 Read the [phase brief](README.md), [architecture](architecture.md), [data/ML contracts](data-and-ml-contracts.md), [frontend plan](frontend-and-demo.md), and [budget runbook](budget-and-recording.md) together. On November 10, 2026, the user made the reported **$100 AWS credit balance available to this project**, replacing the earlier small spending limit and asking to stay comfortably below that maximum. Keep the planning buffer in the budget runbook, one recording session, then teardown. The previously confirmed Free plan and proposed AWS Glue Spark path remain subject to account preflight. Checkpoints 7.1–7.10 are local work; infrastructure documents and plans do not authorize an unattended cloud deployment or account-plan upgrade.
 
@@ -14,7 +14,7 @@ The named folders and commands below are proposed deliverables. They are not com
 |---|---|---|---|
 | 7.1 | Product/data/API contracts and bounded demo fixture | Phase brief | Complete locally |
 | 7.2 | Local platform foundation and CI | 7.1 | Complete locally |
-| 7.3 | Identity, project isolation, and API credentials | 7.2 | Planned |
+| 7.3 | Identity, project isolation, and API credentials | 7.2 | Complete locally |
 | 7.4 | Upload validation, ingestion, and durable job records | 7.3 | Planned |
 | 7.5 | Canonical Spark feature build and S3 manifests | 7.4 | Planned |
 | 7.6 | Bounded training, evaluation, and model registry | 7.5 | Planned |
@@ -94,6 +94,8 @@ Verify:
 **Artifacts:** Identity/authorization modules, access tests, the permission matrix, and a short credential lifecycle guide.
 
 **Exit:** Negative authorization tests cover every resource family before upload or job APIs are exposed.
+
+**Completion:** [7.3 record](completions/7.3.md), [identity and credential guide](identity-and-credentials.md), and [sanitized evidence](../evidence/phase-7/checkpoint-7.3.json). The local application implements project create/list/read and key issue/list/revoke, verifies signed tokens and current key state, and applies the OpenAPI permission policy to all 23 project-scoped operations. All 61 API tests pass under Node 22, including two real DynamoDB Local integration tests. Future data/ML operations and demo sessions remain gated. Cognito provisioning and AWS proof remain 7.10–7.11 work.
 
 ## 7.4 — Implement datasets, events, and durable jobs
 
