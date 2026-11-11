@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { ApiRequest, ApiResponse } from './application.js';
+import { DependencyUnavailable, reportFailure, type ErrorLogger } from './failure.js';
 
 const MAX_BODY = 262144;
 const MAX_BASE64 = Math.ceil(MAX_BODY / 3) * 4;
@@ -14,8 +15,7 @@ export interface HttpApiEvent {
   requestContext: { http: { method: string } };
 }
 
-function failure(status: number, code: string, message: string): ApiResponse {
-  const requestId = `req_${randomBytes(16).toString('hex')}`;
+function failure(status: number, code: string, message: string, requestId = `req_${randomBytes(16).toString('hex')}`): ApiResponse {
   return {
     status,
     headers: { 'content-type': 'application/json', 'x-request-id': requestId, 'cache-control': 'no-store' },
@@ -50,7 +50,7 @@ function validPath(path: unknown): path is string {
   } catch { return false; }
 }
 
-export function createLambdaHandler(application: (request: ApiRequest) => ApiResponse | Promise<ApiResponse>) {
+export function createLambdaHandler(application: (request: ApiRequest) => ApiResponse | Promise<ApiResponse>, logger?: ErrorLogger) {
   return async (event: HttpApiEvent) => {
     let result: ApiResponse;
     try {
@@ -80,8 +80,12 @@ export function createLambdaHandler(application: (request: ApiRequest) => ApiRes
           body,
         });
       }
-    } catch {
-      result = failure(500, 'internal_error', 'The request could not be completed');
+    } catch (error) {
+      const requestId = `req_${randomBytes(16).toString('hex')}`;
+      reportFailure(error, requestId, logger);
+      result = error instanceof DependencyUnavailable
+        ? failure(503, 'unavailable', 'A platform dependency is unavailable', requestId)
+        : failure(500, 'internal_error', 'The request could not be completed', requestId);
     }
     return { statusCode: result.status, headers: result.headers, body: result.body, isBase64Encoded: false };
   };

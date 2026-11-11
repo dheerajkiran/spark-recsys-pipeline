@@ -104,15 +104,21 @@ Revocation updates the project summary and authentication lookup atomically. Sub
 
 ## JWT trust and Cognito configuration
 
-The verifier uses pinned `jose` 6.2.17. It accepts only RS256 access tokens with a configured issuer, recognized key identifier, verified signature, valid issuance/expiry/not-before timing, `token_use: access`, matching `client_id`, a human `username`, and all configured scopes. Principal identity is `issuer#sub`; a body field or decoded gateway claim does not establish identity. Token-selected `jku`, `x5u`, and embedded keys never choose the trust source.
+The verifier uses pinned `jose` 6.2.17. It accepts only RS256 access tokens with a configured issuer, recognized key identifier, verified signature, valid issuance/expiry/not-before timing, `token_use: access`, matching `client_id`, a human `username`, and all configured scopes. JWT time checks allow 30 seconds of clock difference, including the extra issuance-time check; the 24-hour token-lifetime ceiling remains unchanged. Principal identity is `issuer#sub`; a body field or decoded gateway claim does not establish identity. Token-selected `jku`, `x5u`, and embedded keys never choose the trust source.
 
 Local mode fixes issuer `http://loop.local` and client `loop-local`, uses an explicit public JWKS path, and defaults to the `loop/api` scope. Both the signer and verifier reject Lambda execution. Local and Cognito configuration cannot be combined.
 
-For the future Cognito deployment, use `LOOP_AUTH_MODE=cognito`, `LOOP_COGNITO_ISSUER`, `LOOP_COGNITO_CLIENT_ID`, and an at-least-32-byte `LOOP_CURSOR_SECRET`. The issuer must be a standard HTTPS Cognito user-pool URL. Keys are obtained only from that issuer's derived `/.well-known/jwks.json` endpoint, with bounded fetch time and cache settings. `LOOP_JWT_SCOPES` is a unique space-separated scope list, defaulting to `loop/api`.
+For the future Cognito deployment, use `LOOP_AUTH_MODE=cognito`, explicit `LOOP_STORAGE=dynamodb`, `LOOP_DYNAMODB_TABLE`, `AWS_REGION`, `LOOP_COGNITO_ISSUER`, `LOOP_COGNITO_CLIENT_ID`, and an at-least-32-byte `LOOP_CURSOR_SECRET`. Cognito configuration cannot use the default local file store: both environment loading and application construction reject that combination before serving requests. The issuer must be a standard HTTPS Cognito user-pool URL. Keys are obtained only from that issuer's derived `/.well-known/jwks.json` endpoint, with bounded fetch time and cache settings. `LOOP_JWT_SCOPES` is a unique space-separated scope list, defaulting to `loop/api`.
 
 Cognito access tokens bind their app client through `client_id`; this is checked even when `aud` is absent. If resource binding is used, configure `LOOP_COGNITO_AUDIENCE` to require the expected `aud` as an additional check. ID tokens are rejected. The owner-controlled user pool, disabled self-registration, authorization-code/PKCE client, `loop/api` resource-server scope, and seeded recording accounts remain infrastructure work for 7.10 and cloud verification for 7.11. No user pool or AWS account setting is created by this checkpoint.
 
 JWT signature verification does not query Cognito revocation state. Browser logout or pool-side revocation is not an immediate API access-token revocation guarantee here; an otherwise valid token can remain accepted until expiry. Use short access sessions in the later deployment. The application-managed developer-key revocation check is separate.
+
+## Failure responses and diagnostics
+
+Unexpected application and adapter failures return `500 internal_error`. Explicitly classified storage or signing-key dependency failures return `503 unavailable`; invalid credentials still return `401`. Invalid generated responses and corrupt persisted records are internal failures. DynamoDB validation/serialization errors remain internal failures, while service/network outages retain a typed dependency cause.
+
+Each unexpected failure emits one JSON error record to stderr, correlating its request ID with the response. Logs contain only the error level, request ID, safe error class name, and bounded stack source locations. Headers, bodies, thrown messages, raw error objects, and causes are excluded because they may contain credentials. Logger failure cannot change the HTTP outcome. Failed lazy verifier initialization is cleared so a later request can retry setup; startup configuration errors still fail startup.
 
 ## Persistence, transactions, and operational limits
 

@@ -33,6 +33,9 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
   }
   const storage = env.LOOP_STORAGE ?? 'local';
   if (storage !== 'local' && storage !== 'dynamodb') throw new Error('LOOP_STORAGE must be local or dynamodb');
+  if (mode === 'cognito' && env.LOOP_STORAGE !== 'dynamodb') {
+    throw new Error('Cognito authentication requires explicit LOOP_STORAGE=dynamodb');
+  }
   const config: Config = { host, port, dataRoot: resolve(root), auth: { mode: 'disabled' }, storage };
   if (mode !== 'disabled') {
     const cursorSecret = env.LOOP_CURSOR_SECRET;

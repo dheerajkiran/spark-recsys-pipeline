@@ -1,12 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import type { Config } from './config.js';
-import { createDashboardVerifier, type DashboardVerifier } from './auth.js';
+import { AuthenticationError, createDashboardVerifier, type DashboardVerifier } from './auth.js';
 import { ApiError, denied, invalid, notFound, unauthenticated } from './api-error.js';
 import { matchRoute, validateInput, validateOutput } from './api-contract.js';
 import { IdentityService, type Identity, type Scope } from './identity-service.js';
-import { createIdentityStore } from './identity-runtime.js';
+import { assertIdentityStorageConfig, createIdentityStore } from './identity-runtime.js';
 import type { IdentityStore } from './identity-store.js';
 import { paginate, readCursor } from './pagination.js';
+import { DependencyUnavailable, reportFailure, type ErrorLogger } from './failure.js';
 
 export interface ApiRequest {
   method: string;
@@ -20,9 +21,10 @@ export interface ApiResponse {
   headers: Record<string, string>;
   body: string;
 }
-interface Dependencies { store?: IdentityStore; verifier?: DashboardVerifier; now?: () => number }
+interface Dependencies { store?: IdentityStore; verifier?: DashboardVerifier; now?: () => number; logger?: ErrorLogger }
 
 export function createApplication(config: Config, dependencies: Dependencies = {}) {
+  assertIdentityStorageConfig(config);
   const now = dependencies.now ?? Date.now;
   const service = new IdentityService(dependencies.store ?? createIdentityStore(config), now);
   const auth = config.auth ?? { mode: 'disabled' as const };
@@ -58,9 +60,15 @@ export function createApplication(config: Config, dependencies: Dependencies = {
       else {
         const bearer = /^Bearer ([A-Za-z0-9_.-]+)$/i.exec(normalized.authorization ?? '');
         if (!bearer) throw unauthenticated();
-        verifier ??= dependencies.verifier ? Promise.resolve(dependencies.verifier) : createDashboardVerifier(auth);
+        if (!verifier) {
+          const setup = dependencies.verifier ? Promise.resolve(dependencies.verifier) : createDashboardVerifier(auth);
+          verifier = setup;
+          // Share in-flight setup, but allow a later request to recover from failure.
+          void setup.catch(() => { if (verifier === setup) verifier = undefined; });
+        }
         const dashboardVerifier = await verifier;
-        try { identity = await dashboardVerifier.verify(bearer[1] as string); } catch { throw unauthenticated(); }
+        try { identity = await dashboardVerifier.verify(bearer[1] as string); }
+        catch (error) { if (error instanceof AuthenticationError) throw unauthenticated(); throw error; }
       }
       if (!route) throw notFound();
       if (route.template.startsWith('/v1/demo/')) throw unauthenticated();
@@ -105,7 +113,10 @@ export function createApplication(config: Config, dependencies: Dependencies = {
       return json(status, { ...result, request_id: requestId });
     } catch (error) {
       if (error instanceof ApiError) return json(error.status, { code: error.code, message: error.message, request_id: requestId, details: [] });
-      return json(503, { code: 'unavailable', message: 'Platform state is temporarily unavailable', request_id: requestId, details: [] });
+      reportFailure(error, requestId, dependencies.logger);
+      return error instanceof DependencyUnavailable
+        ? json(503, { code: 'unavailable', message: 'A platform dependency is unavailable', request_id: requestId, details: [] })
+        : json(500, { code: 'internal_error', message: 'The request could not be completed', request_id: requestId, details: [] });
     }
   };
 }

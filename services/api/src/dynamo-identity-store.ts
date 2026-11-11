@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { DynamoDBServiceException } from '@aws-sdk/client-dynamodb';
 import { GetCommand, QueryCommand, TransactWriteCommand, type DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { DependencyUnavailable } from './failure.js';
 import {
   StoreConflict, validateKey, validateQuery, validateRecord, validateWrites,
   type IdentityStore, type StoreKey, type StoreRecord, type StoreWrite,
@@ -17,11 +19,36 @@ export class DynamoIdentityStore implements IdentityStore {
     if (!/^[A-Za-z0-9_.-]{3,255}$/.test(tableName)) throw new Error('Invalid identity table name');
   }
 
+  private async send<T>(operation: () => Promise<T>): Promise<T> {
+    try { return await operation(); }
+    catch (error) {
+      const failure = error as {
+        name?: string; code?: string; $fault?: string; $metadata?: unknown;
+        CancellationReasons?: { Code?: string }[];
+      } | null;
+      if (failure?.name === 'ConditionalCheckFailedException'
+        || (failure?.name === 'TransactionCanceledException'
+          && failure.CancellationReasons?.some((reason) => reason.Code === 'ConditionalCheckFailed' || reason.Code === 'TransactionConflict'))
+        || failure?.name === 'TransactionConflictException') throw new StoreConflict();
+      // These indicate malformed programmatic requests, not a transient dependency outage.
+      if (failure?.name === 'ValidationException' || failure?.name === 'SerializationException') throw error;
+      const sdkFailure = error instanceof DynamoDBServiceException
+        || (failure && typeof failure.$metadata === 'object'
+          && (failure.$fault === 'client' || failure.$fault === 'server'));
+      const networkFailure = failure && (
+        ['ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND', 'EPIPE'].includes(failure.code ?? '')
+        || ['TimeoutError', 'RequestTimeout', 'NetworkingError'].includes(failure.name ?? '')
+      );
+      if (sdkFailure || networkFailure) throw new DependencyUnavailable('Identity database is unavailable', { cause: error });
+      throw error;
+    }
+  }
+
   async get(key: StoreKey): Promise<StoreRecord | null> {
     validateKey(key);
-    const response = await this.client.send(new GetCommand({
+    const response = await this.send(() => this.client.send(new GetCommand({
       TableName: this.tableName, Key: { PK: key.pk, SK: key.sk }, ConsistentRead: true,
-    }));
+    })));
     const record = response.Item ? fromItem(response.Item) : null;
     if (record && (record.pk !== key.pk || record.sk !== key.sk)) throw new Error('Unexpected identity key');
     return record;
@@ -32,13 +59,13 @@ export class DynamoIdentityStore implements IdentityStore {
     const records: StoreRecord[] = [];
     let cursor: Record<string, unknown> | undefined;
     do {
-      const response = await this.client.send(new QueryCommand({
+      const response = await this.send(() => this.client.send(new QueryCommand({
         TableName: this.tableName, ConsistentRead: true,
         KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :prefix)',
         ExpressionAttributeNames: { '#pk': 'PK', '#sk': 'SK' },
         ExpressionAttributeValues: { ':pk': pk, ':prefix': skPrefix },
         ...(cursor ? { ExclusiveStartKey: cursor } : {}),
-      }));
+      })));
       for (const item of response.Items ?? []) {
         const record = fromItem(item);
         if (record.pk !== pk || !record.sk.startsWith(skPrefix)) throw new Error('Unexpected identity query key');
@@ -71,14 +98,6 @@ export class DynamoIdentityStore implements IdentityStore {
         } };
       }),
     });
-    try { await this.client.send(command); }
-    catch (error) {
-      const failure = error as { name?: string; CancellationReasons?: { Code?: string }[] };
-      if (failure.name === 'ConditionalCheckFailedException'
-        || (failure.name === 'TransactionCanceledException'
-          && failure.CancellationReasons?.some((reason) => reason.Code === 'ConditionalCheckFailed' || reason.Code === 'TransactionConflict'))
-        || failure.name === 'TransactionConflictException') throw new StoreConflict();
-      throw error;
-    }
+    await this.send(() => this.client.send(command));
   }
 }

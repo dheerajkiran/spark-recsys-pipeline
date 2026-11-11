@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { exportJWK, generateKeyPair, SignJWT, type JWTPayload } from 'jose';
-import { AuthenticationError, createDashboardVerifier, isCognitoIssuer, type AuthConfig } from '../src/auth.js';
+import { AuthenticationError, createDashboardVerifier, isCognitoIssuer, JWT_CLOCK_TOLERANCE_SECONDS, type AuthConfig } from '../src/auth.js';
 import { loadConfig } from '../src/config.js';
+import { DependencyUnavailable } from '../src/failure.js';
 
 const root = await mkdtemp(join(tmpdir(), 'loop-auth-'));
 after(async () => { await rm(root, { recursive: true, force: true }); });
@@ -32,6 +33,31 @@ test('local RSA JWT verifies signature and returns issuer-scoped immutable subje
   const signed = await token({ email: 'private@example.test', 'cognito:groups': ['owners'] });
   assert.deepEqual(await verifier.verify(signed), { kind: 'dashboard', subject: 'http://loop.local#alice' });
 });
+
+for (const [name, offsets, accepted] of [
+  ['iat one second ahead', { iat: 1, exp: 900 }, true],
+  ['iat thirty seconds ahead', { iat: 30, exp: 900 }, true],
+  ['iat thirty-one seconds ahead', { iat: 31, exp: 900 }, false],
+  ['expiry one second ago', { iat: -900, exp: -1 }, true],
+  ['expiry twenty-nine seconds ago', { iat: -900, exp: -29 }, true],
+  ['expiry exactly thirty seconds ago', { iat: -900, exp: -30 }, false],
+  ['expiry thirty-one seconds ago', { iat: -900, exp: -31 }, false],
+  ['not-before one second ahead', { iat: 0, exp: 900, nbf: 1 }, true],
+  ['not-before thirty seconds ahead', { iat: 0, exp: 900, nbf: 30 }, true],
+  ['not-before thirty-one seconds ahead', { iat: 0, exp: 900, nbf: 31 }, false],
+  ['twenty-four-hour lifetime with issuer skew', { iat: 30, exp: 86430 }, true],
+  ['lifetime exceeding twenty-four hours despite clock tolerance', { iat: 30, exp: 86431 }, false],
+] as const) {
+  test(`JWT clock tolerance: ${name}`, async (t) => {
+    const clock = 1900000000;
+    t.mock.timers.enable({ apis: ['Date'], now: clock * 1000 });
+    assert.equal(JWT_CLOCK_TOLERANCE_SECONDS, 30);
+    const claims = Object.fromEntries(Object.entries(offsets).map(([claim, offset]) => [claim, clock + offset]));
+    const signed = await token(claims);
+    if (accepted) assert.equal((await verifier.verify(signed)).subject, 'http://loop.local#alice');
+    else await assert.rejects(verifier.verify(signed), AuthenticationError);
+  });
+}
 
 for (const [name, overrides] of [
   ['expired', { exp: 1, iat: 0 }],
@@ -112,11 +138,14 @@ test('auth configuration is explicit, validated, and local trust cannot escape i
   const cognito = {
     ...baseEnv, LOOP_AUTH_MODE: 'cognito', LOOP_COGNITO_ISSUER: 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Test',
     LOOP_COGNITO_CLIENT_ID: 'client123', LOOP_COGNITO_AUDIENCE: 'https://api.example.test',
+    LOOP_STORAGE: 'dynamodb', LOOP_DYNAMODB_TABLE: 'loop-identity', AWS_REGION: 'us-east-1',
   };
   assert.deepEqual(loadConfig(cognito).auth, {
     mode: 'cognito', issuer: cognito.LOOP_COGNITO_ISSUER, clientId: 'client123', requiredScopes: ['loop/api'], audience: 'https://api.example.test',
   });
   assert.throws(() => loadConfig({ ...cognito, LOOP_LOCAL_JWKS_PATH: jwksPath }), /cannot load local/);
+  assert.throws(() => loadConfig({ ...cognito, LOOP_STORAGE: undefined }), /explicit LOOP_STORAGE=dynamodb/);
+  assert.throws(() => loadConfig({ ...cognito, LOOP_STORAGE: 'local' }), /explicit LOOP_STORAGE=dynamodb/);
   assert.throws(() => loadConfig({ ...cognito, LOOP_COGNITO_CLIENT_ID: '' }), /CLIENT_ID/);
   assert.throws(() => loadConfig({ ...cognito, LOOP_COGNITO_ISSUER: 'http://cognito-idp.us-east-1.amazonaws.com/us-east-1_Test' }), /HTTPS Cognito/);
 });
@@ -154,8 +183,42 @@ test('Cognito verifier pins its JWKS source and validates access-token client pl
     });
     await assert.rejects(remote.verify(await token({ ...claims, client_id: 'other-client' })), AuthenticationError);
     await assert.rejects(remote.verify(await token({ ...claims, aud: 'https://other.test' })), AuthenticationError);
+    await assert.rejects(remote.verify(await token(claims, { kid: 'unknown-key' })), AuthenticationError);
+    const forged = await token(claims);
+    await assert.rejects(remote.verify(`${forged.slice(0, forged.lastIndexOf('.') + 1)}${Buffer.alloc(256).toString('base64url')}`), AuthenticationError);
     assert.deepEqual(seen, [`${issuer}/.well-known/jwks.json`]);
   } finally { globalThis.fetch = originalFetch; }
+});
+
+for (const failure of ['http', 'network', 'timeout', 'malformed-json', 'malformed-jwks'] as const) {
+  test(`Cognito signing-key ${failure} failure is a dependency outage rather than invalid credentials`, async () => {
+    const issuer = 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Test';
+    const originalFetch = globalThis.fetch;
+    const reason = failure === 'timeout' ? new DOMException('private endpoint timed out', 'TimeoutError') : new TypeError('private network details');
+    globalThis.fetch = async () => {
+      if (failure === 'network' || failure === 'timeout') throw reason;
+      if (failure === 'http') return new Response('private provider response', { status: 503 });
+      return new Response(failure === 'malformed-json' ? 'not JSON' : '{"keys":false}', { status: 200 });
+    };
+    try {
+      const remote = await createDashboardVerifier({ mode: 'cognito', issuer, clientId: 'client123', requiredScopes: ['loop/api'] });
+      await assert.rejects(remote.verify(await token({ iss: issuer, client_id: 'client123' })), (error: unknown) => {
+        assert.ok(error instanceof DependencyUnavailable);
+        assert.equal(error.message, 'Dashboard signing keys are unavailable');
+        if (failure === 'network' || failure === 'timeout') assert.equal(error.cause, reason);
+        return true;
+      });
+    } finally { globalThis.fetch = originalFetch; }
+  });
+}
+
+test('unexpected authentication implementation errors are preserved for the server error boundary', async (t) => {
+  const unexpected = new TypeError('unexpected runtime failure');
+  const originalNow = Date.now;
+  t.after(() => { Date.now = originalNow; });
+  const signed = await token();
+  Date.now = () => { throw unexpected; };
+  await assert.rejects(verifier.verify(signed), (error: unknown) => error === unexpected);
 });
 
 test('DynamoDB settings require explicit backend, table, region, and loopback local endpoint', () => {

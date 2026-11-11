@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { DependencyUnavailable } from './failure.js';
 
 export interface StoreKey { pk: string; sk: string }
 export interface StoreRecord extends StoreKey { revision: number; data: Record<string, unknown> }
@@ -14,6 +15,17 @@ export interface IdentityStore {
 
 export class StoreConflict extends Error {
   constructor() { super('Identity state changed; retry the operation'); this.name = 'StoreConflict'; }
+}
+
+// Only filesystem promises pass through here; validation and snapshot decoding stay outside it.
+async function io<T>(operation: Promise<T>): Promise<T> {
+  try { return await operation; }
+  catch (error) {
+    if (error instanceof Error && 'code' in error && typeof error.code === 'string' && /^E[A-Z]+$/.test(error.code)) {
+      throw new DependencyUnavailable('Identity storage is unavailable', { cause: error });
+    }
+    throw error;
+  }
 }
 
 export function validateKey(key: StoreKey): void {
@@ -74,7 +86,10 @@ export class LocalIdentityStore implements IdentityStore {
   private async read(): Promise<StoreRecord[]> {
     let raw: string;
     try { raw = await readFile(this.snapshot, 'utf8'); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      return io(Promise.reject(error));
+    }
     const value: unknown = JSON.parse(raw);
     if (!value || typeof value !== 'object' || !('format' in value) || value.format !== 1
       || !('records' in value) || !Array.isArray(value.records)) throw new Error('Invalid identity snapshot');
@@ -104,21 +119,22 @@ export class LocalIdentityStore implements IdentityStore {
     // Clone before waiting for the lock so a caller cannot mutate an in-flight transaction.
     const transaction = JSON.parse(JSON.stringify(writes)) as StoreWrite[];
     validateWrites(transaction);
-    await mkdir(this.directory, { recursive: true, mode: 0o700 });
-    await chmod(this.directory, 0o700);
+    await io(mkdir(this.directory, { recursive: true, mode: 0o700 }));
+    await io(chmod(this.directory, 0o700));
     const deadline = Date.now() + this.lockTimeoutMs;
     let lock;
     while (!lock) {
       try { lock = await open(this.lockPath, 'wx', 0o600); }
       catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-        if (Date.now() >= deadline) throw new Error('Identity storage is locked; inspect the writer before recovery');
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return io(Promise.reject(error));
+        if (Date.now() >= deadline) throw new DependencyUnavailable('Identity storage is locked; inspect the writer before recovery', { cause: error });
         await delay(10);
       }
     }
     let temp: string | undefined;
+    let failed = false;
     try {
-      await lock.writeFile(JSON.stringify({ pid: process.pid }));
+      await io(lock.writeFile(JSON.stringify({ pid: process.pid })));
       const records = await this.read();
       for (const write of transaction) {
         const current = records.find((record) => record.pk === write.key.pk && record.sk === write.key.sk);
@@ -127,15 +143,21 @@ export class LocalIdentityStore implements IdentityStore {
       const result = records.filter((record) => !transaction.some((write) => write.key.pk === record.pk && write.key.sk === record.sk));
       for (const write of transaction) if (write.record) result.push(write.record);
       temp = join(this.directory, `records.${randomUUID()}.tmp`);
-      const file = await open(temp, 'wx', 0o600);
-      try { await file.writeFile(JSON.stringify({ format: 1, records: result })); await file.sync(); }
-      finally { await file.close(); }
-      await rename(temp, this.snapshot);
+      const file = await io(open(temp, 'wx', 0o600));
+      try { await io(file.writeFile(JSON.stringify({ format: 1, records: result }))); await io(file.sync()); }
+      finally { await io(file.close()); }
+      await io(rename(temp, this.snapshot));
       temp = undefined;
+    } catch (error) {
+      failed = true;
+      throw error;
     } finally {
       if (temp) await unlink(temp).catch(() => undefined);
-      await lock.close();
-      await unlink(this.lockPath);
+      let cleanupError: unknown;
+      try { await io(lock.close()); } catch (error) { cleanupError = error; }
+      try { await io(unlink(this.lockPath)); } catch (error) { cleanupError ??= error; }
+      // A release failure must not replace a conflict, corruption, or failed write's original cause.
+      if (cleanupError && !failed) throw cleanupError;
     }
   }
 }

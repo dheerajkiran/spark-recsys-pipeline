@@ -1,12 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { ApiRequest, ApiResponse } from './application.js';
+import { DependencyUnavailable, reportFailure, type ErrorLogger } from './failure.js';
 
 const MAX_BODY = 262144;
 const SINGLE_HEADERS = new Set(['authorization', 'x-api-key', 'idempotency-key', 'x-demo-session']);
 
-function failure(status: number, code: string, message: string): ApiResponse {
-  const requestId = `req_${randomBytes(16).toString('hex')}`;
+function failure(status: number, code: string, message: string, requestId = `req_${randomBytes(16).toString('hex')}`): ApiResponse {
   return {
     status,
     headers: { 'content-type': 'application/json', 'x-request-id': requestId, 'cache-control': 'no-store' },
@@ -14,7 +14,7 @@ function failure(status: number, code: string, message: string): ApiResponse {
   };
 }
 
-export function createHttpServer(application: (request: ApiRequest) => ApiResponse | Promise<ApiResponse>): Server {
+export function createHttpServer(application: (request: ApiRequest) => ApiResponse | Promise<ApiResponse>, logger?: ErrorLogger): Server {
   return createServer((request, response) => {
     const send = (result: ApiResponse): void => {
       if (response.destroyed || response.writableEnded) return;
@@ -78,8 +78,12 @@ export function createHttpServer(application: (request: ApiRequest) => ApiRespon
             headers: Object.fromEntries(Object.entries(request.headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : value ?? ''])),
           });
           send(result);
-        } catch {
-          send(failure(500, 'internal_error', 'The request could not be completed'));
+        } catch (error) {
+          const requestId = `req_${randomBytes(16).toString('hex')}`;
+          reportFailure(error, requestId, logger);
+          send(error instanceof DependencyUnavailable
+            ? failure(503, 'unavailable', 'A platform dependency is unavailable', requestId)
+            : failure(500, 'internal_error', 'The request could not be completed', requestId));
         }
       })();
     });

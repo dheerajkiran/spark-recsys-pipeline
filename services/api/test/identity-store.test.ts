@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 import { LocalIdentityStore, StoreConflict, type StoreRecord, type StoreWrite } from '../src/identity-store.js';
+import { DependencyUnavailable } from '../src/failure.js';
 
 const execute = promisify(execFile);
 const item = (pk: string, sk: string, revision = 1, name = 'sample'): StoreRecord => ({ pk, sk, revision, data: { name } });
@@ -93,10 +94,43 @@ test('live or stale identity locks fail closed and are never automatically remov
     await store.transact([put(record)]);
     const lock = join(root, 'identity', 'write.lock');
     await writeFile(lock, 'operator-owned-lock', { flag: 'wx' });
-    await assert.rejects(store.transact([put(item('PROJECT#a', 'KEY#new'))]), /locked/);
+    await assert.rejects(store.transact([put(item('PROJECT#a', 'KEY#new'))]), (error: unknown) =>
+      error instanceof DependencyUnavailable && error.message.includes('locked')
+      && (error.cause as NodeJS.ErrnoException).code === 'EEXIST');
     assert.equal(await readFile(lock, 'utf8'), 'operator-owned-lock');
     assert.equal(await store.get({ pk: 'PROJECT#a', sk: 'KEY#new' }), null);
     assert.equal((await store.get(record))?.revision, 1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('filesystem I/O failures are typed dependencies with their original errno cause', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'loop-identity-'));
+  try {
+    const blocked = join(root, 'file-instead-of-directory');
+    await writeFile(blocked, 'not a directory');
+    const store = new LocalIdentityStore(blocked);
+    const dependency = (error: unknown) => error instanceof DependencyUnavailable
+      && error.cause instanceof Error && (error.cause as NodeJS.ErrnoException).code === 'ENOTDIR';
+    await assert.rejects(store.get({ pk: 'PROJECT#a', sk: 'META' }), dependency);
+    await assert.rejects(store.query('PROJECT#a', 'KEY#'), dependency);
+    await assert.rejects(store.transact([put(item('PROJECT#a', 'META'))]), dependency);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('corrupt snapshots and programmer errors retain their failure type instead of becoming dependencies', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'loop-identity-'));
+  try {
+    const store = new LocalIdentityStore(root);
+    const record = item('PROJECT#a', 'META');
+    await store.transact([put(record)]);
+    const snapshot = join(root, 'identity', 'records.json');
+    await writeFile(snapshot, '{');
+    await assert.rejects(store.get(record), SyntaxError);
+    await assert.rejects(store.transact([put(item('PROJECT#b', 'META'))]), SyntaxError);
+    await writeFile(snapshot, JSON.stringify({ format: 1, records: [{ ...record, revision: -1 }] }));
+    await assert.rejects(store.query('PROJECT#a', 'META'), (error: unknown) =>
+      error instanceof Error && !(error instanceof DependencyUnavailable) && /Invalid identity record/.test(error.message));
+    await assert.rejects(store.transact([put({ ...record, data: { unsupported: 1n } })]), TypeError);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

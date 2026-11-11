@@ -8,4 +8,6 @@ The asynchronous domain function in `src/application.ts` is shared by the local 
 
 Checkpoint 7.3 adds separate `LocalIdentityStore` and `DynamoIdentityStore` adapters with conditional all-or-none transactions. Project creation/list/read and key issuance/list/revocation are implemented. Keys are project-bound, scoped, expire within 30 days, disclose their secret once, and are verified against current persisted revocation state. Other project operations enforce authentication/membership/permissions and input validation before returning a gated `503`; public demo sessions are disabled. These adapters do not upgrade the old workflow runner's semantics.
 
+Cognito mode requires explicit DynamoDB storage; it cannot fall back to instance-local files. JWT time validation allows 30 seconds of clock difference. Unexpected failures return `500 internal_error` with a request-correlated, sanitized error log; typed dependency failures return `503 unavailable`. Failed lazy verifier setup can be retried by a later request.
+
 Run `npm run typecheck`, `npm run lint`, `npm run build`, and `npm test`. Set `LOOP_DYNAMODB_TEST_ENDPOINT` to an explicitly local DynamoDB endpoint to include the two integration tests; CI supplies DynamoDB Local. Without it, those two tests are skipped. No AWS account is used by the test suite.

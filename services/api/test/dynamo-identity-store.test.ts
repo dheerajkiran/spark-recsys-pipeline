@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
-import { CreateTableCommand, DeleteTableCommand, DynamoDBClient, waitUntilTableExists } from '@aws-sdk/client-dynamodb';
+import { CreateTableCommand, DeleteTableCommand, DynamoDBClient, DynamoDBServiceException, waitUntilTableExists } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand,
   type GetCommandOutput, type QueryCommandOutput,
 } from '@aws-sdk/lib-dynamodb';
 import { DynamoIdentityStore } from '../src/dynamo-identity-store.js';
 import { StoreConflict, type StoreRecord, type StoreWrite } from '../src/identity-store.js';
+import { DependencyUnavailable } from '../src/failure.js';
 
 type SentCommand = GetCommand | QueryCommand | TransactWriteCommand;
 const record = (pk: string, sk = 'META', revision = 1): StoreRecord => ({ pk, sk, revision, data: { name: 'example' } });
@@ -83,6 +84,40 @@ test('DynamoDB adapter rejects malformed or foreign responses and invalid writes
   await assert.rejects(store.get({ pk: 'PROJECT#a', sk: 'META' }), /Unexpected identity key/);
   await assert.rejects(store.query('PROJECT#a', 'KEY#'), /Unexpected identity query key/);
   await assert.rejects(store.transact([put(record('PROJECT#a')), put(record('PROJECT#a'))]), /Duplicate/);
+});
+
+test('DynamoDB service and network failures are typed dependencies across every command with their cause', async () => {
+  const failures = [
+    new DynamoDBServiceException({ name: 'InternalServerError', $fault: 'server', $metadata: { httpStatusCode: 500 }, message: 'service failed' }),
+    { name: 'ProvisionedThroughputExceededException', $fault: 'client', $metadata: { httpStatusCode: 400 } },
+    Object.assign(new Error('socket reset'), { code: 'ECONNRESET' }),
+    Object.assign(new Error('request timed out'), { name: 'TimeoutError' }),
+  ];
+  for (const failure of failures) {
+    const store = new DynamoIdentityStore(clientWith(async () => { throw failure; }), 'loop-identity');
+    const dependency = (error: unknown) => error instanceof DependencyUnavailable && error.cause === failure;
+    await assert.rejects(store.get({ pk: 'PROJECT#a', sk: 'META' }), dependency);
+    await assert.rejects(store.query('PROJECT#a', 'KEY#'), dependency);
+    await assert.rejects(store.transact([put(record('PROJECT#a'))]), dependency);
+  }
+});
+
+test('DynamoDB programmer failures and invalid response records stay untyped for internal-error handling', async () => {
+  for (const failure of [
+    new Error('unexpected invariant'),
+    new TypeError('wrong internal type'),
+    new DynamoDBServiceException({ name: 'ValidationException', $fault: 'client', $metadata: { httpStatusCode: 400 }, message: 'Invalid internal request' }),
+    new DynamoDBServiceException({ name: 'SerializationException', $fault: 'client', $metadata: { httpStatusCode: 400 }, message: 'Invalid internal encoding' }),
+  ]) {
+    const store = new DynamoIdentityStore(clientWith(async () => { throw failure; }), 'loop-identity');
+    const original = (error: unknown) => error === failure && !(error instanceof DependencyUnavailable);
+    await assert.rejects(store.get({ pk: 'PROJECT#a', sk: 'META' }), original);
+    await assert.rejects(store.query('PROJECT#a', 'KEY#'), original);
+    await assert.rejects(store.transact([put(record('PROJECT#a'))]), original);
+  }
+  const invalid = new DynamoIdentityStore(clientWith(async () => ({ Item: { ...wire(record('PROJECT#a')), revision: -1 } })), 'loop-identity');
+  await assert.rejects(invalid.get({ pk: 'PROJECT#a', sk: 'META' }), (error: unknown) =>
+    error instanceof Error && !(error instanceof DependencyUnavailable) && /Invalid identity record/.test(error.message));
 });
 
 const endpoint = process.env.LOOP_DYNAMODB_TEST_ENDPOINT;

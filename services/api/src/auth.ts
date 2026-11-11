@@ -1,9 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import {
-  createLocalJWKSet, createRemoteJWKSet, jwtVerify,
+  createLocalJWKSet, createRemoteJWKSet, customFetch, decodeProtectedHeader, errors, jwtVerify,
   type JSONWebKeySet, type JWTVerifyGetKey,
 } from 'jose';
+import { DependencyUnavailable } from './failure.js';
+
+export const JWT_CLOCK_TOLERANCE_SECONDS = 30;
 
 interface VerifiedAuthConfig {
   issuer: string;
@@ -63,9 +66,27 @@ export async function createDashboardVerifier(auth: AuthConfig): Promise<Dashboa
     keys = createLocalJWKSet(jwks);
   } else {
     if (!isCognitoIssuer(auth.issuer)) throw new Error('A standard HTTPS Cognito user-pool issuer is required');
-    keys = createRemoteJWKSet(new URL(`${auth.issuer}/.well-known/jwks.json`), {
+    const remoteKeys = createRemoteJWKSet(new URL(`${auth.issuer}/.well-known/jwks.json`), {
       timeoutDuration: 5000, cooldownDuration: 30000, cacheMaxAge: 600000,
+      [customFetch]: async (url, options) => {
+        let response: Response;
+        try { response = await fetch(url, options); }
+        catch (cause) { throw new DependencyUnavailable('Dashboard signing keys are unavailable', { cause }); }
+        if (response.status !== 200) throw new DependencyUnavailable('Dashboard signing keys are unavailable');
+        return response;
+      },
     });
+    keys = async (header, token) => {
+      try { return await remoteKeys(header, token); }
+      catch (cause) {
+        if (cause instanceof errors.JWKSTimeout || cause instanceof errors.JWKSInvalid
+          || cause instanceof errors.JWKInvalid || cause instanceof errors.JWKSMultipleMatchingKeys
+          || (cause instanceof errors.JOSEError && cause.code === 'ERR_JOSE_GENERIC')) {
+          throw new DependencyUnavailable('Dashboard signing keys are unavailable', { cause });
+        }
+        throw cause;
+      }
+    };
   }
   return {
     async verify(token: string): Promise<DashboardIdentity> {
@@ -73,24 +94,37 @@ export async function createDashboardVerifier(auth: AuthConfig): Promise<Dashboa
         if (token.length > 16384 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) {
           throw new AuthenticationError();
         }
+        const header = decodeProtectedHeader(token);
+        if (header.alg !== 'RS256' || typeof header.kid !== 'string' || !header.kid || header.kid.length > 256) {
+          throw new AuthenticationError();
+        }
         const { payload, protectedHeader } = await jwtVerify(token, keys, {
           algorithms: ['RS256'], issuer: auth.issuer,
           ...(auth.audience ? { audience: auth.audience } : {}),
           requiredClaims: ['sub', 'iss', 'exp', 'iat', 'token_use', 'client_id', 'scope', 'username'],
-          clockTolerance: 0, maxTokenAge: 86400,
+          clockTolerance: JWT_CLOCK_TOLERANCE_SECONDS, maxTokenAge: 86400,
         });
         const now = Math.floor(Date.now() / 1000);
         if (typeof protectedHeader.kid !== 'string' || !protectedHeader.kid || protectedHeader.kid.length > 256
           || payload.token_use !== 'access' || payload.client_id !== auth.clientId
           || !validSubject(payload.sub) || !validSubject(payload.username)
-          || typeof payload.iat !== 'number' || !Number.isInteger(payload.iat) || payload.iat > now
+          || typeof payload.iat !== 'number' || !Number.isInteger(payload.iat) || payload.iat > now + JWT_CLOCK_TOLERANCE_SECONDS
           || typeof payload.exp !== 'number' || !Number.isInteger(payload.exp)
           || payload.exp <= payload.iat || payload.exp - payload.iat > 86400
           || typeof payload.scope !== 'string') throw new AuthenticationError();
         const granted = new Set(payload.scope.split(' '));
         if (!auth.requiredScopes.every((scope) => granted.has(scope))) throw new AuthenticationError();
         return { kind: 'dashboard', subject: `${auth.issuer}#${payload.sub}` };
-      } catch { throw new AuthenticationError(); }
+      } catch (error) {
+        if (error instanceof AuthenticationError) throw error;
+        if (error instanceof errors.JOSEAlgNotAllowed || error instanceof errors.JOSENotSupported
+          || error instanceof errors.JWSInvalid || error instanceof errors.JWTInvalid
+          || error instanceof errors.JWTClaimValidationFailed || error instanceof errors.JWTExpired
+          || error instanceof errors.JWSSignatureVerificationFailed || error instanceof errors.JWKSNoMatchingKey) {
+          throw new AuthenticationError();
+        }
+        throw error;
+      }
     },
   };
 }

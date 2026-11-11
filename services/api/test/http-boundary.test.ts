@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import type { ApiRequest, ApiResponse } from '../src/application.js';
 import { createHttpServer } from '../src/http.js';
 import { createLambdaHandler, type HttpApiEvent } from '../src/lambda.js';
+import { DependencyUnavailable, type ErrorLog, type ErrorLogger } from '../src/failure.js';
 
 type Handler = (input: ApiRequest) => ApiResponse | Promise<ApiResponse>;
 const success = (): ApiResponse => ({ status: 200, headers: { 'content-type': 'application/json' }, body: '{"ok":true}' });
@@ -12,8 +13,8 @@ const event = (extra: Partial<HttpApiEvent> = {}): HttpApiEvent => ({
   version: '2.0', rawPath: '/health', requestContext: { http: { method: 'GET' } }, ...extra,
 });
 
-async function withServer(handler: Handler, run: (port: number, server: Server) => Promise<void>): Promise<void> {
-  const server = createHttpServer(handler).listen(0, '127.0.0.1');
+async function withServer(handler: Handler, run: (port: number, server: Server) => Promise<void>, logger?: ErrorLogger): Promise<void> {
+  const server = createHttpServer(handler, logger).listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('No local socket');
@@ -70,6 +71,7 @@ test('HTTP permits a body exactly at the documented byte limit', async () => {
 
 test('HTTP rejects malformed targets and duplicate credentials without crashing', async () => {
   let calls = 0;
+  const logs: ErrorLog[] = [];
   await withServer(async () => { calls++; return success(); }, async (port) => {
     for (const target of ['//[/', 'http://[broken', '/health%', '/health%00', '/health#fragment', '/\\health']) {
       const result = await send(port, target);
@@ -81,18 +83,27 @@ test('HTTP rejects malformed targets and duplicate credentials without crashing'
     assert.equal(calls, 0);
     assert.equal((await send(port, '/health')).status, 200);
     assert.equal(calls, 1);
-  });
+  }, (entry) => { logs.push(entry); });
+  assert.deepEqual(logs, [], 'Expected validation failures are not unexpected-error logs');
 });
 
 test('HTTP converts asynchronous failures to a sanitized error response', async () => {
-  await withServer(async () => { throw new Error('Bearer private-secret /private/file'); }, async (port) => {
+  const logs: ErrorLog[] = [];
+  const failure = new TypeError('Bearer private-secret\n    at /private/body.json:12:34\nheaders: private-header', { cause: new Error('private-cause') });
+  Object.assign(failure, { headers: { authorization: 'private-header' }, body: 'private-body' });
+  await withServer(async () => { throw failure; }, async (port) => {
     const result = await send(port, '/health');
     assert.equal(result.status, 500);
     assert.equal(result.body.code, 'internal_error');
     assert.equal(result.body.request_id, result.requestId);
     assert.deepEqual(result.body.details, []);
-    assert.doesNotMatch(JSON.stringify(result.body), /private-secret|private\/file/);
-  });
+    assert.doesNotMatch(JSON.stringify(result.body), /private-secret|private\/body|private-header/);
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0]?.request_id, result.requestId);
+    assert.equal(logs[0]?.error_name, 'TypeError');
+    assert.match(logs[0]?.stack ?? '', /http-boundary\.test\.ts:\d+:\d+/);
+    assert.doesNotMatch(JSON.stringify(logs), /private-secret|private\/body|private-header|private-body|private-cause/);
+  }, (entry) => { logs.push(entry); });
 });
 
 test('Lambda awaits its application and normalizes header names', async () => {
@@ -116,7 +127,8 @@ test('Lambda enforces the decoded byte limit without dispatching oversized bodie
 
 test('Lambda rejects malformed base64, paths and duplicate normalized headers', async () => {
   let calls = 0;
-  const lambda = createLambdaHandler(async () => { calls++; return success(); });
+  const logs: ErrorLog[] = [];
+  const lambda = createLambdaHandler(async () => { calls++; return success(); }, (entry) => { logs.push(entry); });
   for (const body of ['a', '!!!!', 'abcd====', 'ab=c', 'AB==', 'a b=']) {
     const result = await lambda(event({ body, isBase64Encoded: true }));
     assert.equal(result.statusCode, 400, body);
@@ -127,10 +139,12 @@ test('Lambda rejects malformed base64, paths and duplicate normalized headers', 
   }
   assert.equal((await lambda(event({ headers: { Authorization: 'Bearer first', authorization: 'Bearer second' } }))).statusCode, 400);
   assert.equal(calls, 0);
+  assert.deepEqual(logs, []);
 });
 
 test('Lambda returns safe structured errors if its application rejects', async () => {
-  const lambda = createLambdaHandler(async () => { throw new Error('private-secret'); });
+  const logs: ErrorLog[] = [];
+  const lambda = createLambdaHandler(async () => { throw new Error('private-secret'); }, (entry) => { logs.push(entry); });
   const result = await lambda(event());
   const body = JSON.parse(result.body) as Record<string, unknown>;
   assert.equal(result.statusCode, 500);
@@ -138,4 +152,50 @@ test('Lambda returns safe structured errors if its application rejects', async (
   assert.equal(body.request_id, result.headers['x-request-id']);
   assert.deepEqual(body.details, []);
   assert.doesNotMatch(result.body, /private-secret/);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0]?.request_id, body.request_id);
+  assert.equal(logs[0]?.error_name, 'Error');
+  assert.match(logs[0]?.stack ?? '', /http-boundary\.test\.ts:\d+:\d+/);
+  assert.doesNotMatch(JSON.stringify(logs), /private-secret/);
+});
+
+test('HTTP and Lambda distinguish dependency failures and correlate one safe log with each 503', async () => {
+  const dependency = new DependencyUnavailable('private-storage-message', { cause: new Error('private-dependency-cause') });
+  const httpLogs: ErrorLog[] = [];
+  await withServer(async () => { throw dependency; }, async (port) => {
+    const result = await send(port, '/health');
+    assert.equal(result.status, 503);
+    assert.equal(result.body.code, 'unavailable');
+    assert.equal(result.body.request_id, result.requestId);
+    assert.equal(httpLogs.length, 1);
+    assert.equal(httpLogs[0]?.request_id, result.requestId);
+    assert.equal(httpLogs[0]?.error_name, 'DependencyUnavailable');
+    assert.doesNotMatch(JSON.stringify({ response: result.body, logs: httpLogs }), /private-storage-message|private-dependency-cause/);
+  }, (entry) => { httpLogs.push(entry); });
+
+  const lambdaLogs: ErrorLog[] = [];
+  const lambda = createLambdaHandler(async () => { throw dependency; }, (entry) => { lambdaLogs.push(entry); });
+  const result = await lambda(event());
+  const body = JSON.parse(result.body) as Record<string, unknown>;
+  assert.equal(result.statusCode, 503);
+  assert.equal(body.code, 'unavailable');
+  assert.equal(body.request_id, result.headers['x-request-id']);
+  assert.equal(lambdaLogs.length, 1);
+  assert.equal(lambdaLogs[0]?.request_id, body.request_id);
+  assert.equal(lambdaLogs[0]?.error_name, 'DependencyUnavailable');
+  assert.doesNotMatch(JSON.stringify({ body, logs: lambdaLogs }), /private-storage-message|private-dependency-cause/);
+});
+
+test('adapter responses survive a failing custom logger', async () => {
+  const logger: ErrorLogger = () => { throw new Error('private-logger-failure'); };
+  await withServer(async () => { throw new Error('private-application-failure'); }, async (port) => {
+    const result = await send(port, '/health');
+    assert.equal(result.status, 500);
+    assert.equal(result.body.code, 'internal_error');
+    assert.doesNotMatch(JSON.stringify(result.body), /private-logger-failure|private-application-failure/);
+  }, logger);
+  const result = await createLambdaHandler(async () => { throw new Error('private-application-failure'); }, logger)(event());
+  assert.equal(result.statusCode, 500);
+  assert.equal((JSON.parse(result.body) as { code: string }).code, 'internal_error');
+  assert.doesNotMatch(result.body, /private-logger-failure|private-application-failure/);
 });
